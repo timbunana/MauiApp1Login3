@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="MauiApp1Login3.Login"
+             Title="Login">
+    <VerticalStackLayout Spacing="10" Padding="10">
+
+        <Label
+            Text="SISTEMA APR-MAXSECURITY"
+            VerticalOptions="Center"
+            HorizontalOptions="Center" />
+
+        <Image 
+            Source="logo1.png."
+            HeightRequest="280"
+            HorizontalOptions="Center"
+            Aspect="AspectFit" />
+
+        <Label Text="Usuario" />
+        <Entry x:Name="txtUsuario" Placeholder="Entre com o usuario" />
+        <Label Text="Senha" />
+        <Entry x:Name="txtSenha" Placeholder="Entre com a senha" IsPassword="True"/>
+
+        <Button Text="Entrar" 
+                Clicked="Button_Clicked"
+                HorizontalOptions="Center"
+                WidthRequest="200"
+                HeightRequest="30"/>
+
+    </VerticalStackLayout>
+</ContentPage>
