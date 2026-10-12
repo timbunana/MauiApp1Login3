@@ -12,7 +12,7 @@ namespace MauiApp1Login3
         protected override Window CreateWindow(IActivationState? activationState)
         {
             // Substitua 'LoginPage' pela classe da página que deseja iniciar
-            return new MyWindow(new Login());
+            return new MyWindow(new MainPage());
         }
     }
 
