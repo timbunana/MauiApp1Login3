@@ -128,4 +128,7 @@ As etapas 1 a 4 são pré-requisito da 5: enquanto não existirem, o app continu
 - **Onde o servidor vai ficar** — pendente de conversa com a TI.
 - **Indicadores do dashboard** — ainda não definidos. Três saem de graça do modelo e têm valor direto para segurança do trabalho: volume de APRs por período e equipe; percentual com pendência; e **quais itens mais aparecem como não conforme** — este último aponta onde falta EPI ou treinamento.
 - **Assinaturas e cobrança** — levantamento adiado.
-- **Identidade visual por cliente** — se cada empresa terá logo e cores próprias no app e no PDF, ou se o produto é CampoSeguro para todos. Afeta o design system.
+
+## 11. Decisões fechadas
+
+- **Identidade visual única.** O produto é CampoSeguro para todas as empresas; não há logo nem cores por cliente. O design system (`DESIGN.md`) segue com cores fixas, sem necessidade de tokens parametrizáveis por tenant. O nome da empresa aparece como *dado* no PDF e no painel — nunca como marca.
