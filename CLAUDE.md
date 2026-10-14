@@ -4,6 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Visão geral
 
+> O produto se chama **CampoSeguro** (`br.com.camposeguro.app`). O repositório e a pasta raiz ainda usam o nome antigo `MauiApp1Login3` — renomear o remoto é decisão do dono do repositório. O projeto, o namespace e o `ApplicationId` já estão renomeados.
+>
+> **`ARQUITETURA.md` descreve o produto alvo**: três aplicações (plataforma, painel da empresa, app do colaborador) sobre um banco PostgreSQL compartilhado, com multi-tenancy e sincronização offline. O que está neste repositório hoje é só o app, ainda com autenticação falsa e catálogo fixo no código. Leia a arquitetura antes de evoluir o app, porque o catálogo vai passar a vir do servidor.
+
 App .NET MAUI para registro de **APR (Análise Preliminar de Risco)** em campo — checklist de EPIs/condições de segurança, captura de foto como evidência e geração de um PDF do registro. Escopo atual coberto: Telecomunicações (trabalho em altura e no mesmo nível).
 
 UI, identificadores e comentários são em **pt-BR** — mantenha essa convenção ao adicionar código.
@@ -19,12 +23,12 @@ $env:PATH = "$env:LOCALAPPDATA\Microsoft\dotnet;$env:PATH"
 
 # Build. O -p:TargetFrameworks é obrigatório: sem ele o restore avalia TODOS os TFMs
 # do .csproj e falha por falta das workloads de Android/iOS.
-dotnet build MauiApp1Login3\MauiApp1Login3.csproj -p:TargetFrameworks=net10.0-windows10.0.19041.0
+dotnet build CampoSeguro\CampoSeguro.csproj -p:TargetFrameworks=net10.0-windows10.0.19041.0
 
 # Executar. DOTNET_ROOT é obrigatório: o apphost procura o runtime no caminho padrão
 # da máquina e sai com 0x80008003 ("You must install .NET") sem essa variável.
 $env:DOTNET_ROOT = "$env:LOCALAPPDATA\Microsoft\dotnet"
-.\MauiApp1Login3\bin\Debug\net10.0-windows10.0.19041.0\win-x64\MauiApp1Login3.exe
+.\CampoSeguro\bin\Debug\net10.0-windows10.0.19041.0\win-x64\CampoSeguro.exe
 ```
 
 TFMs declarados: `net10.0-android`, `net10.0-ios`, `net10.0-maccatalyst`, `net10.0-windows10.0.19041.0`.
@@ -44,7 +48,6 @@ Pilha resultante: `MainPage → Login → Entrada → AprTelecom1`. Voltar de `E
 2. `Login` — valida contra uma **lista hardcoded** em `Login.xaml.cs`; grava `usuario_logado` no `SecureStorage` (valor nunca é lido depois).
 3. `Entrada` — um card por área de atuação; só **Telecomunicações** navega, os outros dois avisam "em breve".
 4. `AprTelecom1` — tela principal e única com lógica real.
-5. `Protegida.xaml` — página órfã do template, não referenciada.
 
 **`AprTelecom1` (coração do app):** o tipo de trabalho (*Mesmo Nível* × *Altura*) é escolhido por **dois botões dentro de um card na própria tela** (`OnMesmoNivelClicked` / `OnAlturaClicked`); o botão escolhido troca para `PrimaryButton`. Antes isso era um `DisplayActionSheet` no `OnAppearing` — não volte a usar diálogo de sistema para isso. O nome do colaborador também é um campo da tela (`txtNome`), não um `DisplayPromptAsync`.
 
@@ -62,16 +65,13 @@ Ao salvar: monta o PDF com **QuestPDF** em memória, grava em `FileSystem.Curren
 
 Em aberto:
 - O fluxo **nunca foi validado no Android** — tudo que foi verificado rodou no alvo Windows. Câmera, permissões e `Share` precisam de teste em aparelho real.
-- `.csproj` tem entradas `MauiImage` para `logo1.png` e `dotnet_bot.png`, que não existem mais.
-- `logo2.png` e `logo_entrada.png` são arquivos idênticos e **não são mais usados** por nenhuma tela.
-- `Protegida.xaml` e `MImage.cs` continuam órfãos.
 - No Windows a **barra de título fica clara**: o WinUI não acompanha o tema escuro do app. Não afeta Android.
 
 Já corrigido (não reintroduzir): rótulos genéricos `"Item N"` no PDF; mapeamento trocado dos EPIs no modo "Mesmo Nível"; `Stream` descartado na pré-visualização da foto; opções de área sem destino e sem aviso; asset inexistente `analise_poste1.png`; build quebrado por `MCT001`; gravação em pasta pública no Android; ausência de permissão de câmera; navegação por `Application.Current.MainPage`; diálogos nativos fora do design system.
 
 Débitos estruturais: autenticação mockada com senhas em texto plano no código; sessão gravada no `SecureStorage` mas nunca lida; nenhuma persistência/histórico de APRs; é possível salvar uma APR sem nenhum item marcado; campos `string` não-anuláveis sem inicialização sob `Nullable=enable`; `catch` genéricos exibindo `ex.Message` cru ao usuário.
 
-Uma armadilha de rotina: **o app aberto trava os arquivos de `bin/`** e o build falha com `MSB3027`. Feche o processo `MauiApp1Login3` antes de compilar.
+Uma armadilha de rotina: **o app aberto trava os arquivos de `bin/`** e o build falha com `MSB3027`. Feche o processo `CampoSeguro` antes de compilar.
 
 ## Git
 
