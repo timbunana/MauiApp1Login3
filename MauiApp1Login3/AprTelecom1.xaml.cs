@@ -1,9 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Maui.ApplicationModel;
+using Microsoft.Maui.ApplicationModel.DataTransfer;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Storage;
 using QuestPDF.Fluent;
@@ -17,7 +18,26 @@ namespace MauiApp1Login3;
 
 public partial class AprTelecom1 : ContentPage
 {
-    private FileResult fotoCapturada;
+    private const string TrabalhoMesmoNivel = "Trabalho no Mesmo Nível";
+    private const string TrabalhoEmAltura = "Trabalho em Altura";
+
+    // Fonte única dos itens de verificação: alimenta tanto a tela quanto o PDF.
+    private static readonly (string Nome, bool AplicaMesmoNivel)[] CatalogoEpis =
+    {
+        ("Uso de Capacete com Jugular", true),
+        ("Cinto Tipo Paraquedista e Talabarte", false),
+        ("Luvas de Proteção Adequadas", true),
+        ("Bota de Segurança com Biqueira", true),
+        ("Óculos de Proteção", true),
+        ("Sinalização de Segurança na Área", false),
+        ("Escada Inspecionada e Amarrada", false),
+        ("Ferramentas Isoladas/Em Bom Estado", false),
+        ("Ausência de Cabos Elétricos Desencapados", false),
+        ("Condições Climáticas Favoráveis", false),
+    };
+
+    private List<ItemEpi> itensDaAtividade = new();
+    private byte[]? fotoEvidencia;
     private string tipoAtividadeSelecionada = string.Empty;
 
     public AprTelecom1()
@@ -28,108 +48,138 @@ public partial class AprTelecom1 : ContentPage
         QuestPDF.Settings.License = LicenseType.Community;
     }
 
-    // Executado assim que a página aparece na tela, antes de exibir os EPIs para marcação
-    protected override async void OnAppearing()
+    private void OnMesmoNivelClicked(object sender, EventArgs e) => SelecionarTipo(TrabalhoMesmoNivel);
+
+    private void OnAlturaClicked(object sender, EventArgs e) => SelecionarTipo(TrabalhoEmAltura);
+
+    private void SelecionarTipo(string tipo)
     {
-        base.OnAppearing();
+        tipoAtividadeSelecionada = tipo;
 
-        // Garante que a pergunta só será feita se ainda não tiver sido respondida nesta navegação
-        if (string.IsNullOrEmpty(tipoAtividadeSelecionada))
-        {
-            string acao = await DisplayActionSheet(
-                "Confirmação de Segurança",
-                "Cancelar",
-                null,
-                "Trabalho no Mesmo Nível",
-                "Trabalho em Altura");
+        bool mesmoNivel = tipo == TrabalhoMesmoNivel;
+        BtnMesmoNivel.Style = ObterEstilo(mesmoNivel ? "PrimaryButton" : "SecondaryButton");
+        BtnAltura.Style = ObterEstilo(mesmoNivel ? "SecondaryButton" : "PrimaryButton");
+        BtnMesmoNivel.HeightRequest = 48;
+        BtnAltura.HeightRequest = 48;
 
-            if (acao == "Cancelar" || string.IsNullOrEmpty(acao))
-            {
-                // Se cancelar, volta para a tela anterior
-                await Navigation.PopAsync();
-                return;
-            }
-
-            tipoAtividadeSelecionada = acao;
-            AtualizarVisibilidadeEpis();
-        }
+        MontarChecklist();
     }
 
-    // Controla quais switches aparecem na tela de acordo com a escolha prévia
-    private void AtualizarVisibilidadeEpis()
+    private static Style ObterEstilo(string chave) => (Style)Application.Current!.Resources[chave];
+
+    // Monta a lista aplicável à atividade escolhida. Tela e PDF leem desta mesma coleção,
+    // então o relatório nunca diverge do que foi exibido.
+    private void MontarChecklist()
     {
-        bool mesmoNivel = (tipoAtividadeSelecionada == "Trabalho no Mesmo Nível");
+        bool mesmoNivel = tipoAtividadeSelecionada == TrabalhoMesmoNivel;
 
-        // Os 4 primeiros ficam sempre visíveis (Capacete, Luvas, Bota, Óculos)
-        if (Opcao1Switch != null) Opcao1Switch.IsVisible = true;
-        if (Opcao2Switch != null) Opcao2Switch.IsVisible = true;
-        if (Opcao3Switch != null) Opcao3Switch.IsVisible = true;
-        if (Opcao4Switch != null) Opcao4Switch.IsVisible = true;
+        itensDaAtividade = CatalogoEpis
+            .Where(epi => !mesmoNivel || epi.AplicaMesmoNivel)
+            .Select((epi, indice) => new ItemEpi(indice + 1, epi.Nome))
+            .ToList();
 
-        // Do 5 ao 10 aparecem apenas se NÃO for no mesmo nível (Trabalho em Altura)
-        if (Opcao5Switch != null) Opcao5Switch.IsVisible = !mesmoNivel;
-        if (Opcao6Switch != null) Opcao6Switch.IsVisible = !mesmoNivel;
-        if (Opcao7Switch != null) Opcao7Switch.IsVisible = !mesmoNivel;
-        if (Opcao8Switch != null) Opcao8Switch.IsVisible = !mesmoNivel;
-        if (Opcao9Switch != null) Opcao9Switch.IsVisible = !mesmoNivel;
-        if (Opcao10Switch != null) Opcao10Switch.IsVisible = !mesmoNivel;
+        BindableLayout.SetItemsSource(ListaEpis, itensDaAtividade);
+        SubtituloLabel.Text = $"{tipoAtividadeSelecionada} · {itensDaAtividade.Count} itens";
+        ChecklistCard.IsVisible = true;
+    }
+
+    private async Task<bool> GarantirPermissaoCameraAsync()
+    {
+        var status = await Permissions.CheckStatusAsync<Permissions.Camera>();
+
+        if (status != PermissionStatus.Granted)
+            status = await Permissions.RequestAsync<Permissions.Camera>();
+
+        if (status != PermissionStatus.Granted)
+        {
+            await Dialogo.AvisarAsync(
+                "Permissão necessária",
+                "Para registrar a evidência é preciso liberar o acesso à câmera nas configurações do aparelho.");
+            return false;
+        }
+
+        return true;
     }
 
     // Método acionado ao clicar no botão da câmera
     private async void OnTirarFotoClicked(object sender, EventArgs e)
     {
-        string acao = await DisplayActionSheet(
-            "Capturar Evidência",
-            "Cancelar",
-            null,
-            "Câmera Traseira",
-            "Câmera Frontal (Selfie)",
-            "Escolher da Galeria");
+        // O MediaPicker abre o app de câmera do sistema, que é quem oferece frontal/traseira —
+        // por isso aqui a escolha é apenas entre câmera e galeria.
+        string? acao = await Dialogo.PerguntarAsync(
+            "Evidência",
+            "De onde vem a foto?",
+            new[] { "Tirar foto", "Escolher da galeria" },
+            "Cancelar");
 
-        if (acao == "Cancelar" || string.IsNullOrEmpty(acao))
+        if (acao is null or "Cancelar")
             return;
 
         try
         {
-            FileResult photo = null;
+            FileResult? photo;
 
-            if (acao == "Câmera Traseira" && MediaPicker.Default.IsCaptureSupported)
-            {
-                photo = await MediaPicker.Default.CapturePhotoAsync(new MediaPickerOptions { Title = "Foto da Evidência" });
-            }
-            else if (acao == "Câmera Frontal (Selfie)")
-            {
-                photo = await MediaPicker.Default.CapturePhotoAsync();
-            }
-            else if (acao == "Escolher da Galeria")
+            if (acao == "Escolher da galeria")
             {
                 photo = await MediaPicker.Default.PickPhotoAsync();
+            }
+            else
+            {
+                if (!MediaPicker.Default.IsCaptureSupported)
+                {
+                    await Dialogo.AvisarAsync(
+                        "Indisponível",
+                        "Este aparelho não suporta captura de foto pela câmera.");
+                    return;
+                }
+
+                if (!await GarantirPermissaoCameraAsync())
+                    return;
+
+                photo = await MediaPicker.Default.CapturePhotoAsync(new MediaPickerOptions { Title = "Foto da Evidência" });
             }
 
             if (photo != null)
             {
-                fotoCapturada = photo;
+                // Copia os bytes de imediato: o arquivo temporário do MediaPicker pode sumir e
+                // um Stream aberto aqui já estaria descartado quando a imagem fosse renderizada.
+                byte[] bytes;
                 using (Stream stream = await photo.OpenReadAsync())
+                using (var memoria = new MemoryStream())
                 {
-                    FotoEvidenciaImage.Source = ImageSource.FromStream(() => stream);
-                    FotoEvidenciaImage.IsVisible = true;
+                    await stream.CopyToAsync(memoria);
+                    bytes = memoria.ToArray();
                 }
+
+                fotoEvidencia = bytes;
+                FotoEvidenciaImage.Source = ImageSource.FromStream(() => new MemoryStream(bytes));
+                FotoBorder.IsVisible = true;
+                FotoBtn.Text = "Trocar evidência";
             }
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Erro", $"Não foi possível obter a imagem: {ex.Message}", "OK");
+            await Dialogo.AvisarAsync("Erro", $"Não foi possível obter a imagem: {ex.Message}");
         }
     }
 
-    // Método para Salvar os dados e Gerar o PDF automaticamente na pasta Downloads
+    // Método para Salvar os dados e gerar o PDF, entregue pelo compartilhamento do sistema
     private async void OnSalvarClicked(object sender, EventArgs e)
     {
-        // 1. Pede o nome do usuário para compor o nome do arquivo
-        string nomeUsuario = await DisplayPromptAsync("Identificação", "Digite o seu nome para o registro da APR:");
+        if (string.IsNullOrEmpty(tipoAtividadeSelecionada))
+        {
+            await Dialogo.AvisarAsync(
+                "Falta escolher",
+                "Informe se a atividade é no mesmo nível ou em altura antes de salvar.");
+            return;
+        }
+
+        string nomeUsuario = txtNome.Text?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(nomeUsuario))
         {
-            await DisplayAlert("Aviso", "O nome do usuário é obrigatório para gerar o PDF.", "OK");
+            await Dialogo.AvisarAsync(
+                "Falta a identificação",
+                "Preencha o nome de quem está assinando a APR.");
             return;
         }
 
@@ -138,53 +188,13 @@ public partial class AprTelecom1 : ContentPage
         string dataHoraStr = DateTime.Now.ToString("yyyyMMdd_HHmmss");
         string fileName = $"APR_{nomeArquivoSeguro}_{dataHoraStr}.pdf";
 
-        // 2. Coleta o estado dos switches com base na regra de negócio escolhida no início
-        bool[] opcoes;
-        string[] nomesOpcoes;
-
-        if (tipoAtividadeSelecionada == "Trabalho no Mesmo Nível")
-        {
-            opcoes = new bool[] {
-                Opcao1Switch.IsToggled,
-                Opcao2Switch.IsToggled,
-                Opcao3Switch.IsToggled,
-                Opcao4Switch.IsToggled
-            };
-            nomesOpcoes = new string[] { "Capacete", "Luvas", "Bota", "Óculos" };
-        }
-        else
-        {
-            opcoes = new bool[] {
-                Opcao1Switch.IsToggled, Opcao2Switch.IsToggled, Opcao3Switch.IsToggled,
-                Opcao4Switch.IsToggled, Opcao5Switch.IsToggled, Opcao6Switch.IsToggled,
-                Opcao7Switch.IsToggled, Opcao8Switch.IsToggled, Opcao9Switch.IsToggled,
-                Opcao10Switch.IsToggled
-            };
-            nomesOpcoes = new string[] {
-                "Item 1", "Item 2", "Item 3", "Item 4", "Item 5",
-                "Item 6", "Item 7", "Item 8", "Item 9", "Item 10"
-            };
-        }
-
-        bool todosOk = opcoes.All(o => o);
+        bool todosOk = itensDaAtividade.All(i => i.Marcado);
 
         try
         {
-            // 3. Converte a foto capturada em bytes (se existir) para inserir no PDF
-            byte[] fotoBytes = null;
-            if (fotoCapturada != null)
-            {
-                using (var stream = await fotoCapturada.OpenReadAsync())
-                {
-                    using (var memoryStream = new MemoryStream())
-                    {
-                        await stream.CopyToAsync(memoryStream);
-                        fotoBytes = memoryStream.ToArray();
-                    }
-                }
-            }
+            byte[]? fotoBytes = fotoEvidencia;
 
-            // 4. Criação do documento PDF estruturado via QuestPDF em memória
+            // Criação do documento PDF estruturado via QuestPDF em memória
             using var pdfMemoryStream = new MemoryStream();
 
             Document.Create(container =>
@@ -196,16 +206,13 @@ public partial class AprTelecom1 : ContentPage
                     page.PageColor(QColors.White);
                     page.DefaultTextStyle(x => x.FontSize(11).FontColor(QColors.Grey.Darken3));
 
-                    // Cabeçalho do PDF
                     page.Header().Text("Relatório de APR - Telecomunicações")
                         .SemiBold().FontSize(18).FontColor(QColors.Blue.Medium);
 
-                    // Conteúdo principal
                     page.Content().PaddingVertical(10).Column(col =>
                     {
                         col.Spacing(10);
 
-                        // Metadados do Registro
                         col.Item().Text($"Colaborador: {nomeUsuario}");
                         col.Item().Text($"Tipo de Atividade: {tipoAtividadeSelecionada}");
                         col.Item().Text($"Data e Hora: {DateTime.Now:dd/MM/yyyy HH:mm:ss}");
@@ -213,15 +220,13 @@ public partial class AprTelecom1 : ContentPage
 
                         col.Item().LineHorizontal(1).LineColor(QColors.Grey.Lighten1);
 
-                        // Lista dos itens de verificação filtrados
                         col.Item().Text("Itens de Verificação:").Bold();
-                        for (int i = 0; i < opcoes.Length; i++)
+                        foreach (var item in itensDaAtividade)
                         {
-                            string statusTexto = opcoes[i] ? "Conforme (OK)" : "Não Conforme / Desligado";
-                            col.Item().Text($"• {nomesOpcoes[i]}: {statusTexto}");
+                            string statusTexto = item.Marcado ? "Conforme (OK)" : "Não Conforme / Desligado";
+                            col.Item().Text($"• {item.Nome}: {statusTexto}");
                         }
 
-                        // Adiciona a evidência fotográfica se houver
                         if (fotoBytes != null)
                         {
                             col.Item().PaddingTop(10).Text("Evidência Fotográfica:").Bold();
@@ -229,7 +234,6 @@ public partial class AprTelecom1 : ContentPage
                         }
                     });
 
-                    // Rodapé do PDF
                     page.Footer().AlignCenter().Text(x =>
                     {
                         x.Span("Gerado por aplicativo MAUI - Página ");
@@ -241,40 +245,32 @@ public partial class AprTelecom1 : ContentPage
 
             pdfMemoryStream.Position = 0;
 
-            // 5. Define automaticamente o caminho para a pasta Downloads dependendo da plataforma
-            string pastaDownloads = string.Empty;
+            // Grava na área privada do app: funciona em todas as plataformas e sem pedir
+            // permissão de armazenamento (o Android bloqueia escrita direta em pastas públicas).
+            string filePath = Path.Combine(FileSystem.Current.AppDataDirectory, fileName);
 
-#if ANDROID
-            pastaDownloads = Android.OS.Environment.GetExternalStoragePublicDirectory(Android.OS.Environment.DirectoryDownloads)?.AbsolutePath
-                             ?? FileSystem.Current.AppDataDirectory;
-#else
-            pastaDownloads = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
-            if (!Directory.Exists(pastaDownloads))
-            {
-                pastaDownloads = FileSystem.Current.AppDataDirectory;
-            }
-#endif
-
-            string filePath = Path.Combine(pastaDownloads, fileName);
-
-            // Grava o arquivo físico diretamente na pasta de Downloads
             using (var fileStream = File.Create(filePath))
             {
                 await pdfMemoryStream.CopyToAsync(fileStream);
             }
 
-            // 6. Alerta de sucesso informando onde o arquivo foi salvo automaticamente
-            await DisplayAlert("Sucesso", $"PDF salvo automaticamente em:\n{filePath}", "OK");
+            // Entrega o arquivo pelo compartilhamento do sistema (e-mail, WhatsApp, Drive...),
+            // já que a pasta do app não é navegável.
+            await Share.Default.RequestAsync(new ShareFileRequest
+            {
+                Title = "Relatório de APR",
+                File = new ShareFile(filePath)
+            });
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Erro", $"Não foi possível gerar o PDF: {ex.Message}", "OK");
+            await Dialogo.AvisarAsync("Erro", $"Não foi possível gerar o PDF: {ex.Message}");
         }
     }
 
     // Método para o botão Sair
     private async void OnSairClicked(object sender, EventArgs e)
     {
-        await Navigation.PopAsync();
+        await Shell.Current.GoToAsync("..");
     }
 }

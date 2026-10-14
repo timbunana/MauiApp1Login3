@@ -7,10 +7,16 @@ public partial class Login : ContentPage
         InitializeComponent();
     }
 
-    [Obsolete]
+    private async void OnEsqueciSenhaTapped(object? sender, TappedEventArgs e)
+    {
+        // Não há backend de autenticação: o acesso é liberado pelo responsável da equipe.
+        await Dialogo.AvisarAsync(
+            "Recuperar acesso",
+            "A redefinição de senha é feita pelo responsável pela equipe. Procure seu supervisor para liberar um novo acesso.");
+    }
+
     private async void Button_Clicked(object sender, EventArgs e)
     {
-
         try
         {
             List<DadosUsuario> lista_usuarios = new List<DadosUsuario>()
@@ -35,18 +41,19 @@ public partial class Login : ContentPage
                 ))
             {
                 await SecureStorage.SetAsync("usuario_logado", dados_digitados.Usuario);
-                Application.Current.MainPage = new NavigationPage(new Entrada());
-
+                await Shell.Current.GoToAsync(nameof(Entrada));
             }
             else
             {
-                await DisplayAlert("Ops", "Usuário ou senha inválidos", "Fechar");
+                await Dialogo.AvisarAsync(
+                    "Acesso negado",
+                    "Usuário ou senha inválidos. Confira os dados e tente de novo.",
+                    "Fechar");
             }
         }
         catch (Exception ex)
         {
-            DisplayAlert("Ops", ex.Message, "Fechar");
+            await Dialogo.AvisarAsync("Algo deu errado", ex.Message, "Fechar");
         }
-
     }
 }

@@ -1,103 +1,142 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:MauiApp1Login3"
              x:Class="MauiApp1Login3.AprTelecom1"
-             Title="APR Telecomunicações">
+             Shell.NavBarIsVisible="False">
 
+  <Grid>
     <ScrollView>
-        <VerticalStackLayout Padding="20" Spacing="15">
+        <VerticalStackLayout Padding="24,32,24,28" Spacing="20">
 
-            <Label 
-                Text="Análise Preliminar de Risco (APR)"
-                FontSize="20"
-                FontAttributes="Bold"
-                HorizontalOptions="Center"
-                Margin="0,0,0,10" />
+            <VerticalStackLayout Spacing="8">
+                <Label Text="TELECOMUNICAÇÕES" Style="{StaticResource EyebrowText}" />
+                <Label Text="Análise preliminar de risco."
+                       Style="{StaticResource HeadlineText}"
+                       FontSize="24" />
+            </VerticalStackLayout>
 
-            <!-- 10 Opções (Switch) -->
-            <Grid ColumnDefinitions="*, Auto">
-                <Label Text="1. Uso de Capacete com Jugular" VerticalOptions="Center" FontSize="15" />
-                <Switch x:Name="Opcao1Switch" Grid.Column="1" IsToggled="False" />
-            </Grid>
+            <!-- Tipo de trabalho: era um ActionSheet do sistema, agora é parte da tela. -->
+            <Border Style="{StaticResource Card}" Padding="20">
+                <VerticalStackLayout Spacing="14">
+                    <Border Style="{StaticResource IconChip}" WidthRequest="42" HeightRequest="42">
+                        <Image Source="ic_shield.png"
+                               WidthRequest="20" HeightRequest="20"
+                               HorizontalOptions="Center" VerticalOptions="Center" />
+                    </Border>
 
-            <Grid ColumnDefinitions="*, Auto">
-                <Label Text="2. Cinto Tipo Paraquedista e Talabarte" VerticalOptions="Center" FontSize="15" />
-                <Switch x:Name="Opcao2Switch" Grid.Column="1" IsToggled="False" />
-            </Grid>
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Como é a atividade?" Style="{StaticResource TitleText}" />
+                        <Label Text="A escolha define quais itens precisam ser conferidos."
+                               Style="{StaticResource SecondaryText}" />
+                    </VerticalStackLayout>
 
-            <Grid ColumnDefinitions="*, Auto">
-                <Label Text="3. Luvas de Proteção Adequadas" VerticalOptions="Center" FontSize="15" />
-                <Switch x:Name="Opcao3Switch" Grid.Column="1" IsToggled="False" />
-            </Grid>
+                    <Button x:Name="BtnMesmoNivel"
+                            Text="No mesmo nível"
+                            Style="{StaticResource SecondaryButton}"
+                            HeightRequest="48"
+                            Clicked="OnMesmoNivelClicked" />
 
-            <Grid ColumnDefinitions="*, Auto">
-                <Label Text="4. Bota de Segurança com Biqueira" VerticalOptions="Center" FontSize="15" />
-                <Switch x:Name="Opcao4Switch" Grid.Column="1" IsToggled="False" />
-            </Grid>
+                    <Button x:Name="BtnAltura"
+                            Text="Em altura"
+                            Style="{StaticResource SecondaryButton}"
+                            HeightRequest="48"
+                            Clicked="OnAlturaClicked" />
+                </VerticalStackLayout>
+            </Border>
 
-            <Grid ColumnDefinitions="*, Auto">
-                <Label Text="5. Óculos de Proteção" VerticalOptions="Center" FontSize="15" />
-                <Switch x:Name="Opcao5Switch" Grid.Column="1" IsToggled="False" />
-            </Grid>
+            <!-- Checklist. Os itens vêm de CatalogoEpis, em AprTelecom1.xaml.cs. -->
+            <Border x:Name="ChecklistCard" Style="{StaticResource Card}" Padding="20" IsVisible="False">
+                <VerticalStackLayout Spacing="14">
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Itens de verificação" Style="{StaticResource TitleText}" />
+                        <Label x:Name="SubtituloLabel" Style="{StaticResource SecondaryText}" />
+                    </VerticalStackLayout>
 
-            <Grid ColumnDefinitions="*, Auto">
-                <Label Text="6. Sinalização de Segurança na Área" VerticalOptions="Center" FontSize="15" />
-                <Switch x:Name="Opcao6Switch" Grid.Column="1" IsToggled="False" />
-            </Grid>
+                    <VerticalStackLayout x:Name="ListaEpis" Spacing="0">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="local:ItemEpi">
+                                <Grid ColumnDefinitions="*, Auto" ColumnSpacing="16" Padding="0,12">
+                                    <Label Text="{Binding Rotulo}"
+                                           Style="{StaticResource BodyText}"
+                                           FontSize="15"
+                                           VerticalOptions="Center" />
+                                    <Switch Grid.Column="1"
+                                            IsToggled="{Binding Marcado, Mode=TwoWay}"
+                                            VerticalOptions="Center" />
+                                </Grid>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
 
-            <Grid ColumnDefinitions="*, Auto">
-                <Label Text="7. Escada Inspecionada e Amarrada" VerticalOptions="Center" FontSize="15" />
-                <Switch x:Name="Opcao7Switch" Grid.Column="1" IsToggled="False" />
-            </Grid>
+            <!-- Identificação: era um DisplayPrompt na hora de salvar. -->
+            <Border Style="{StaticResource Card}" Padding="20">
+                <VerticalStackLayout Spacing="12">
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Identificação" Style="{StaticResource TitleText}" />
+                        <Label Text="Nome de quem está assinando a APR."
+                               Style="{StaticResource SecondaryText}" />
+                    </VerticalStackLayout>
 
-            <Grid ColumnDefinitions="*, Auto">
-                <Label Text="8. Ferramentas Isoladas/Em Bom Estado" VerticalOptions="Center" FontSize="15" />
-                <Switch x:Name="Opcao8Switch" Grid.Column="1" IsToggled="False" />
-            </Grid>
+                    <Border Style="{StaticResource FormField}" Padding="16,2">
+                        <Entry x:Name="txtNome"
+                               Placeholder="Seu nome completo"
+                               HeightRequest="44" />
+                    </Border>
+                </VerticalStackLayout>
+            </Border>
 
-            <Grid ColumnDefinitions="*, Auto">
-                <Label Text="9. Ausência de Cabos Elétricos Desencapados" VerticalOptions="Center" FontSize="15" />
-                <Switch x:Name="Opcao9Switch" Grid.Column="1" IsToggled="False" />
-            </Grid>
+            <!-- Evidência fotográfica -->
+            <Border Style="{StaticResource Card}" Padding="20">
+                <VerticalStackLayout Spacing="14">
+                    <Border Style="{StaticResource IconChip}" WidthRequest="42" HeightRequest="42">
+                        <Image Source="ic_camera.png"
+                               WidthRequest="20" HeightRequest="20"
+                               HorizontalOptions="Center" VerticalOptions="Center" />
+                    </Border>
 
-            <Grid ColumnDefinitions="*, Auto">
-                <Label Text="10. Condições Climáticas Favoráveis" VerticalOptions="Center" FontSize="15" />
-                <Switch x:Name="Opcao10Switch" Grid.Column="1" IsToggled="False" />
-            </Grid>
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Evidência" Style="{StaticResource TitleText}" />
+                        <Label Text="Uma foto do local reforça o registro."
+                               Style="{StaticResource SecondaryText}" />
+                    </VerticalStackLayout>
 
-            <Line X2="300" Stroke="Gray" HorizontalOptions="Center" Margin="0,10" />
+                    <Border x:Name="FotoBorder" IsVisible="False"
+                            Stroke="Transparent" StrokeThickness="0" Padding="0">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="16" />
+                        </Border.StrokeShape>
+                        <Image x:Name="FotoEvidenciaImage"
+                               Aspect="AspectFill"
+                               HeightRequest="170" />
+                    </Border>
 
-            <!-- Botão de Tirar Foto -->
-            <Button 
-                Text="📷 Capturar Evidência (Tirar Foto)" 
-                BackgroundColor="#2196F3"
-                TextColor="White"
-                Clicked="OnTirarFotoClicked" />
+                    <Button x:Name="FotoBtn"
+                            Text="Capturar evidência"
+                            Style="{StaticResource SecondaryButton}"
+                            HeightRequest="48"
+                            Clicked="OnTirarFotoClicked" />
+                </VerticalStackLayout>
+            </Border>
 
-            <!-- Botão para sair -->
-            <Button
-                Text="Sair"
-                BackgroundColor="#f44336"
-                TextColor="White"
-                Clicked="OnSairClicked" />
+            <VerticalStackLayout Spacing="10">
+                <Button Text="Salvar e compartilhar  →"
+                        Style="{StaticResource PrimaryButton}"
+                        HeightRequest="50"
+                        Clicked="OnSalvarClicked" />
 
-            <!-- Imagem para exibir o resultado da foto -->
-            <Image 
-                x:Name="FotoEvidenciaImage"
-                HeightRequest="200"
-                Aspect="AspectFit"
-                IsVisible="False"
-                HorizontalOptions="Center" />
-
-            <!-- Botão de Salvar -->
-            <Button 
-                Text="Salvar APR" 
-                BackgroundColor="#4CAF50"
-                TextColor="White"
-                Margin="0,20,0,0"
-                Clicked="OnSalvarClicked" />
+                <Button Text="Sair"
+                        Style="{StaticResource DangerButton}"
+                        HeightRequest="48"
+                        Clicked="OnSairClicked" />
+            </VerticalStackLayout>
 
         </VerticalStackLayout>
     </ScrollView>
+
+    <local:Dialogo x:Name="Dialogo" />
+  </Grid>
 
 </ContentPage>

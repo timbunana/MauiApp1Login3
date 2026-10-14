@@ -7,12 +7,15 @@ namespace MauiApp1Login3
         public App()
         {
             InitializeComponent();
+
+            // O design system é só escuro (ver DESIGN.md): fixar evita que o tema claro
+            // do sistema vaze nos controles nativos.
+            UserAppTheme = AppTheme.Dark;
         }
 
         protected override Window CreateWindow(IActivationState? activationState)
         {
-            // Substitua 'LoginPage' pela classe da página que deseja iniciar
-            return new MyWindow(new MainPage());
+            return new MyWindow(new AppShell());
         }
     }
 
