@@ -2,7 +2,7 @@
 
 Proposta de arquitetura do produto. Registra as decisões já tomadas, o porquê de cada uma e o que ainda está em aberto. Quem for implementar deve ler isto antes do `DESIGN.md`.
 
-> **Estado atual:** a etapa 1 (`Domain` + `Data` + `Migrator`) está construída; ver `BANCO.md`. O app MAUI ainda usa autenticação falsa, catálogo fixo no código e nenhuma persistência além do PDF gerado. O restante deste documento é o alvo.
+> **Este documento descreve o alvo, não o que está construído.** O estado de cada etapa está no **`ROADMAP.md`**.
 
 ## 1. Visão geral
 

@@ -12,6 +12,10 @@ App .NET MAUI para registro de **APR (Análise Preliminar de Risco)** em campo �
 
 UI, identificadores e comentários são em **pt-BR** — mantenha essa convenção ao adicionar código.
 
+## Roadmap
+
+**`ROADMAP.md` é a fonte do estado do projeto e deve ser atualizado ao fim de toda sessão de trabalho**, no mesmo commit das mudanças, sem esperar o usuário pedir. Isso inclui o status e a data das etapas, os itens que entraram ou saíram das listas (trabalho em paralelo, decisões pendentes, débitos) e uma linha no "Histórico" com o commit. O commit só existe depois de criado; ao atualizar o roadmap no próprio commit, use `—` e preencha o hash na próxima atualização. Ao concluir uma etapa, remova do roadmap os débitos que ela resolveu.
+
 ## Build e execução
 
 Não há projeto de testes, lint ou CI neste repositório. Toda a verificação hoje é build + execução manual.
