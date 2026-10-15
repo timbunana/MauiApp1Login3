@@ -2,7 +2,7 @@
 
 Proposta de arquitetura do produto. Registra as decisões já tomadas, o porquê de cada uma e o que ainda está em aberto. Quem for implementar deve ler isto antes do `DESIGN.md`.
 
-> **Estado atual:** só existe hoje o app MAUI, com autenticação falsa (lista fixa no código), catálogo de EPIs fixo no código e nenhuma persistência além do PDF gerado. Tudo descrito aqui é o alvo, não o que está construído.
+> **Estado atual:** a etapa 1 (`Domain` + `Data` + `Migrator`) está construída; ver `BANCO.md`. O app MAUI ainda usa autenticação falsa, catálogo fixo no código e nenhuma persistência além do PDF gerado. O restante deste documento é o alvo.
 
 ## 1. Visão geral
 
@@ -50,18 +50,25 @@ A Plataforma é o único contexto que ignora o filtro. Esse bypass deve ser expl
 
 ## 4. Modelo de dados
 
+> Implementado em `CampoSeguro.Domain` / `CampoSeguro.Data`. Tabelas, restrições e triggers estão documentados em **`BANCO.md`**; aqui fica só o resumo.
+
 Entidades centrais (campos de auditoria `CriadoEm`/`CriadoPor` implícitos em todas):
 
 - **Tenant** — empresa cliente. Nome, documento, situação da assinatura.
-- **Usuario** — `Email` (identificador de login), `SenhaHash`, `TenantId`, `Papel` (`AdminPlataforma`, `Gestor`, `Tecnico`), `Ativo`.
-- **Catalogo** — conjunto de verificação de uma atividade, por tenant. Ex.: "Telecom — Altura". Versionado.
-- **CatalogoItem** — item do checklist. Texto, ordem, `Ativo`. **Nunca excluído**, apenas desativado.
-- **Apr** — o registro em si: tenant, autor, catálogo e **versão** usados, tipo de atividade, data, situação.
-- **AprItem** — **cópia congelada** de cada item no momento da assinatura: o texto do item e se estava conforme.
-- **AprEvidencia** — foto vinculada à APR: caminho do arquivo, dimensões, hash.
-- **Convite** — `TokenHash`, `UsuarioId`, `ExpiraEm`, `UsadoEm`.
+- **AdministradorPlataforma** — equipe CampoSeguro, sem tenant. Separado de `Usuario` para que o `TenantId` de `Usuario` nunca seja nulo.
+- **Usuario** — `Nome`, `Email` (identificador de login), `SenhaHash`, `TenantId`, `Papel` (`Gestor`, `Tecnico`), `Ativo`.
+- **Convite** — `Tipo` (convite ou redefinição de senha), `TokenHash`, `UsuarioId`, `ExpiraEm`, `UsadoEm`, `RevogadoEm`.
+- **SessaoDispositivo** — refresh token por aparelho, revogável. Sem ela, desativar um colaborador não cortaria o acesso dele.
+- **Catalogo** — conjunto de verificação de uma atividade, por tenant. Ex.: "Telecom — Altura". **O catálogo define a atividade**: a APR não tem um campo "tipo" separado.
+- **CatalogoItem** — identidade estável do item ao longo das versões. **Nunca é excluído.**
+- **CatalogoVersao** / **CatalogoVersaoItem** — retrato numerado do catálogo, com o texto e a ordem de cada item. Rascunho editável até ser publicado; depois de publicado, imutável.
+- **Apr** — APR assinada: tenant, autor (e o nome dele congelado), **versão** do catálogo, `AssinadaEm` (aparelho), `RecebidaEm` (servidor), hash do conteúdo, local (GPS opcional + descrição), PDF. O rascunho existe só no aparelho.
+- **AprItem** — **cópia congelada** de cada item no momento da assinatura: texto, `Resposta` (`Conforme`/`NaoConforme`/`NaoAplica`), observação e o item de origem.
+- **AprEvidencia** — foto vinculada à APR: hash, dimensões, caminho do arquivo (preenchido no upload).
 
-**A cópia congelada em `AprItem` é o ponto mais importante deste modelo.** Se a APR apenas referenciasse os itens do catálogo, editar o checklist mudaria o conteúdo de todas as APRs passadas — um documento assinado em março passaria a dizer outra coisa em agosto. Sendo documento de segurança do trabalho, isso inviabilizaria qualquer auditoria.
+**A cópia congelada em `AprItem` é o ponto mais importante deste modelo.** Se a APR apenas referenciasse os itens do catálogo, editar o checklist mudaria o conteúdo de todas as APRs passadas — um documento assinado em março passaria a dizer outra coisa em agosto. Sendo documento de segurança do trabalho, isso inviabilizaria qualquer auditoria. Por isso a imutabilidade da APR assinada e da versão publicada é garantida **por trigger no banco**, e não só pelo código.
+
+**A resposta não é um booleano.** "Não respondido" e "não conforme" precisam ser distinguíveis, senão o indicador de não conformidade sai errado.
 
 ## 5. Identidade e acesso
 
@@ -130,5 +137,9 @@ As etapas 1 a 4 são pré-requisito da 5: enquanto não existirem, o app continu
 - **Assinaturas e cobrança** — levantamento adiado.
 
 ## 11. Decisões fechadas
+
+- **A APR registra só o autor**, sem lista de participantes da equipe. Incluir participantes depois exige apenas uma tabela nova.
+- **Local da APR:** coordenadas do GPS, opcionais porque podem falhar sem sinal, mais uma descrição livre (poste, torre, endereço).
+- **Um técnico ativo em uma empresa por vez.** O e-mail é único entre usuários ativos de todos os tenants, e o login por e-mail resolve o tenant diretamente.
 
 - **Identidade visual única.** O produto é CampoSeguro para todas as empresas; não há logo nem cores por cliente. O design system (`DESIGN.md`) segue com cores fixas, sem necessidade de tokens parametrizáveis por tenant. O nome da empresa aparece como *dado* no PDF e no painel — nunca como marca.

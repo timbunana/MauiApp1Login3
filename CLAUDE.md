@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > O produto se chama **CampoSeguro** (`br.com.camposeguro.app`). O repositório e a pasta raiz ainda usam o nome antigo `MauiApp1Login3` — renomear o remoto é decisão do dono do repositório. O projeto, o namespace e o `ApplicationId` já estão renomeados.
 >
-> **`ARQUITETURA.md` descreve o produto alvo**: três aplicações (plataforma, painel da empresa, app do colaborador) sobre um banco PostgreSQL compartilhado, com multi-tenancy e sincronização offline. O que está neste repositório hoje é só o app, ainda com autenticação falsa e catálogo fixo no código. Leia a arquitetura antes de evoluir o app, porque o catálogo vai passar a vir do servidor.
+> **`ARQUITETURA.md` descreve o produto alvo**: três aplicações (plataforma, painel da empresa, app do colaborador) sobre um banco PostgreSQL compartilhado, com multi-tenancy e sincronização offline. Hoje existem o app (ainda com autenticação falsa e catálogo fixo no código) e a camada de dados — `CampoSeguro.Domain`, `CampoSeguro.Data` e `CampoSeguro.Migrator`, documentados em **`BANCO.md`**. Leia a arquitetura antes de evoluir o app, porque o catálogo vai passar a vir do servidor.
 
 App .NET MAUI para registro de **APR (Análise Preliminar de Risco)** em campo — checklist de EPIs/condições de segurança, captura de foto como evidência e geração de um PDF do registro. Escopo atual coberto: Telecomunicações (trabalho em altura e no mesmo nível).
 
@@ -60,6 +60,16 @@ Ao salvar: monta o PDF com **QuestPDF** em memória, grava em `FileSystem.Curren
 **Sem MVVM:** toda a lógica está em `*.xaml.cs` (event handlers). Não há ViewModels, serviços nem modelos além de `DadosUsuario` e `ItemEpi`. O `CommunityToolkit.Maui` está inicializado, mas nenhum recurso dele é usado ainda.
 
 **Estilos:** o design system vive em `Resources/Styles/Colors.xaml` + `Styles.xaml` e está documentado em **`DESIGN.md`** — leia antes de mexer em qualquer tela. É **tema escuro único** (`UserAppTheme = AppTheme.Dark` em `App`), com cores diretas (sem `AppThemeBinding`). **Nenhum hex dentro de página**: só `StaticResource`. Ícones são SVGs em `Resources/Images/ic_*.svg`, referenciados no XAML com extensão **`.png`** (o Resizetizer converte no build) e com a cor embutida no arquivo. `EstiloNativo.RemoverBordaDosCampos()`, chamado no `MauiProgram`, tira a borda nativa do `Entry` por plataforma. XAML é compilado com `MauiXamlInflator=SourceGen`.
+
+## Camada de dados
+
+`CampoSeguro.Domain` (entidades, sem dependências) → `CampoSeguro.Data` (EF Core 10 + Npgsql, migrations em `Migracoes/`) → `CampoSeguro.Migrator` (console que aplica as migrations, lendo a conexão de `CAMPOSEGURO_DB`). Todos são `net10.0` puro: compilam com `dotnet build CampoSeguro.Migrator`, sem workload MAUI. Comandos de migration e convenções estão no `BANCO.md`.
+
+Regras que não são óbvias pelo código:
+- **Toda entidade de tenant herda `EntidadeDoTenant` e precisa de `FiltrarPorTenant<T>` no `OnModelCreating`**, além de chaves compostas `(TenantId, X)` nas relações. Se faltar o filtro, o modelo nem monta (`GarantirFiltroEmTodoTenant`).
+- **A migration `Imutabilidade` é escrita à mão** (triggers). Ao regerar a `Inicial`, copie esse arquivo antes e restaure depois.
+- **Nenhum backend aplica migration na inicialização.** Só o Migrator.
+- Os pacotes do EF estão alinhados em 10.0.13 com uma referência explícita ao `Relational`; sem ela, o Npgsql traz o 10.0.4 para quem referencia `Data` e o build quebra com `CS1705`.
 
 ## Limitações conhecidas
 
