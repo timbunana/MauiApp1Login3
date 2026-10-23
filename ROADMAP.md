@@ -30,10 +30,11 @@ Feito na API:
 - Login do gestor, `GET /eu`, consulta e aceite de convite (vale para gestor e técnico; redefinição de senha revoga as sessões dos aparelhos).
 - Colaboradores: cadastrar (com link de convite), listar, desativar (revoga links e sessões), reativar e anonimizar (LGPD).
 - Links: reenviar convite e gerar redefinição de senha de técnico. O gestor que esqueceu a senha recupera pela Plataforma (`/redefinicao-senha`).
+- Catálogos: criar, renomear, desativar; rascunho (editar, descartar, publicar, abrir a próxima versão); modelos "Telecom — Altura" e "Telecom — Mesmo Nível", importados como rascunho.
 
 Falta:
-- Catálogos: editar o rascunho, publicar e abrir a próxima versão; carga inicial de "Telecom — Altura" e "Telecom — Mesmo Nível" com os 10 itens do app.
 - Troca de senha pelo próprio usuário logado.
+- Consulta das APRs recebidas (lista, detalhe, PDF e fotos). Depende da etapa 4, que é quem recebe as APRs.
 - **`Manager.Web`**, incluindo a página de aceite do convite: lê o token do fragmento (`#`) do link e chama `POST /convites/consultar` e `/convites/aceitar`. Até existir, aceitar um convite exige chamar a API diretamente.
 
 **Fora de qualquer etapa: `Platform.Web`.** O frontend da Administração não está no plano; hoje a Plataforma só é operável pela API. Sugestão: fazer junto com o `Manager.Web`, na mesma tecnologia.
@@ -59,7 +60,7 @@ Não depende das etapas acima.
 | Item | Status | Observação |
 |---|---|---|
 | Validar o app no Android (câmera, permissões, `Share`) | ⬜ | Maior risco do que já existe; exige workload `maui`, Android SDK e JDK |
-| Projeto de testes automatizados | ✅ 2026-10-23 | `CampoSeguro.Testes`, 94 casos (domínio, banco, Plataforma e Painel); precisa de um PostgreSQL em `CAMPOSEGURO_TESTE_DB` |
+| Projeto de testes automatizados | ✅ 2026-10-23 | `CampoSeguro.Testes`, 103 casos (domínio, banco, Plataforma e Painel); precisa de um PostgreSQL em `CAMPOSEGURO_TESTE_DB` |
 | Separar em repositórios: núcleo (`Domain`, `Data`, `Migrator`), Administração, Gestão e App | ⬜ | Depende de como o núcleo será distribuído; os testes se dividem junto, e o fluxo Plataforma → Painel vira teste do núcleo ou de ponta a ponta |
 | CI rodando os testes | ⬜ | Precisa de um PostgreSQL no runner |
 | Infra: Docker Compose, Nginx, HTTPS | ⛔ | Depende de onde o servidor vai ficar |
@@ -94,7 +95,7 @@ As decisões já tomadas ficam no `ARQUITETURA.md` §11.
 
 **Camada de dados** (detalhes no `BANCO.md`)
 - O banco não impede incluir `apr_item` numa APR já recebida; a API precisa garantir.
-- O banco não confere se o item de uma versão pertence ao mesmo catálogo.
+- O banco não confere se o item de uma versão pertence ao mesmo catálogo; hoje a edição do rascunho no Painel garante.
 - CNPJ só numérico no CHECK e na validação; o alfanumérico é recusado.
 
 **APIs** (detalhes no `CLAUDE.md`)
@@ -108,4 +109,5 @@ As decisões já tomadas ficam no `ARQUITETURA.md` §11.
 | 2026-10-15 | Criado este roadmap | `00aff5a` |
 | 2026-10-23 | Etapa 2 concluída: `Platform.Api` (login JWT, empresas, convite e reenvio de gestor), `Data/Seguranca`, `--criar-admin` no Migrator | `fa68ea2` |
 | 2026-10-23 | Projeto `CampoSeguro.Testes` (79 casos). Etapa 3 iniciada: `Manager.Api` com login do gestor, `/eu` e aceite de convite | `2c49e35` |
-| 2026-10-23 | Colaboradores no Painel (cadastro, links, desativar, reativar, anonimizar); redefinição de senha do gestor pela Plataforma; decisão de repositórios separados registrada | — |
+| 2026-10-23 | Colaboradores no Painel (cadastro, links, desativar, reativar, anonimizar); redefinição de senha do gestor pela Plataforma; decisão de repositórios separados registrada | `c30eff2` |
+| 2026-10-23 | Catálogos no Painel: ciclo rascunho → publicação → próxima versão e modelos de Telecom | — |

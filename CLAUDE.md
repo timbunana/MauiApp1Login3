@@ -120,6 +120,7 @@ Backend do gestor da empresa-cliente. Mesma estrutura da Plataforma, porta 5090,
 - `POST /autenticacao/login` (só gestor; técnico com a senha certa recebe 403) e `GET /eu`.
 - `POST /convites/consultar` e `POST /convites/aceitar`: abertas, para qualquer colaborador definir a senha pelo link.
 - `/colaboradores`: `GET` (só ativos; `?incluirDesativados=true` para todos), `GET /{id}`, `POST` (cadastra e devolve o link do convite; sem `papel`, é técnico) e as ações `POST /{id}/convite`, `/redefinicao-senha`, `/desativar`, `/reativar`, `/anonimizar`.
+- `/catalogos`: `GET` (`?incluirInativos=true`), `POST`, `GET|PUT /{id}`, `POST /{id}/desativar|reativar`, `GET /{id}/versoes/{numero}`; rascunho em `GET|POST|PUT|DELETE /{id}/rascunho` e `POST /{id}/rascunho/publicar`; modelos em `GET /modelos` e `POST /modelos/{codigo}`.
 
 Regras que não são óbvias pelo código:
 - **O tenant vem só do token**: `ContextoTenantDaRequisicao` lê as claims `tenant` e `sub` a cada consulta. Nada de tenant em corpo, query ou rota.
@@ -129,6 +130,8 @@ Regras que não são óbvias pelo código:
 - Link inválido, vencido, usado ou revogado dão **a mesma resposta**, de propósito.
 - **Redefinição de senha pelo Painel só vale para técnico.** O link volta para quem o gerou; se um gestor pudesse gerar o de outro gestor, assumiria a conta dele. Gestor recupera a senha pela Plataforma.
 - Desativar revoga os links pendentes e as sessões dos aparelhos na mesma gravação. Anonimizar (`Usuario.Anonimizar`) exige estar desativado, é irreversível e não toca no `apr.autor_nome`.
+- **Catálogo:** criar abre o rascunho da versão 1; `PUT /rascunho` substitui a lista inteira, na ordem enviada; publicar congela; `POST /rascunho` abre a N+1 copiando a última publicada. Item com `itemId` mantém a identidade (é o que agrupa o indicador de não conformidade mesmo após corrigir o texto); sem `itemId` é item novo. **A API confere que o `itemId` é do mesmo catálogo**, o que o banco não faz. Itens antigos são apagados e os novos incluídos em gravações separadas, por causa dos índices únicos de ordem e item.
+- **Modelos** (`Catalogos/Modelos.cs`) usam os mesmos textos do `CatalogoEpis` do app e são importados como **rascunho**: quem publica é a empresa, depois de revisar. Se mudar um texto lá, mude aqui também até a etapa 5 aposentar a lista fixa.
 - Emissão de link (`LinksDeAcesso` em `Data/Seguranca`) e situação do acesso (`Usuario.Situacao`) são compartilhadas com a Plataforma: mude lá, não em cada API.
 
 ## Limitações conhecidas

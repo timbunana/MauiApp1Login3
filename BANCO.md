@@ -125,6 +125,6 @@ A tabela de controle é `ef_historico_migracoes`.
 ## Limitações conhecidas
 
 - **Itens da APR depois da assinatura:** o banco não impede incluir um `apr_item` numa APR já recebida. A API deve gravar a APR e todos os itens numa única transação e recusar inclusões posteriores.
-- **Consistência entre versão e catálogo:** o banco não confere se o `catalogo_item` de uma versão pertence ao mesmo `catalogo`; a API do Painel garante isso.
+- **Consistência entre versão e catálogo:** o banco não confere se o `catalogo_item` de uma versão pertence ao mesmo `catalogo`; quem garante é a edição do rascunho no Painel (`PUT /catalogos/{id}/rascunho`), coberta por teste. Qualquer outro ponto que grave `catalogo_versao_item` precisa repetir a checagem.
 - **CNPJ alfanumérico:** `ck_tenant_documento` aceita só 14 dígitos, e `Cnpj.Valido` também. O CNPJ alfanumérico da Receita Federal, emitido para novas inscrições desde julho de 2026, seria recusado. Suportá-lo exige uma migration no CHECK e o novo cálculo do dígito verificador.
 - **Unicidade de e-mail:** com e-mail único entre ativos, um técnico não pode estar ativo em duas empresas ao mesmo tempo. A decisão foi tomada em 2026-10-15 e mudá-la exige separar pessoa e vínculo.

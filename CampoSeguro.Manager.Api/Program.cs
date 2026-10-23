@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using CampoSeguro.Data;
 using CampoSeguro.Manager.Api;
 using CampoSeguro.Manager.Api.Autenticacao;
+using CampoSeguro.Manager.Api.Catalogos;
 using CampoSeguro.Manager.Api.Colaboradores;
 using CampoSeguro.Manager.Api.Convites;
 using CampoSeguro.Manager.Api.Perfil;
@@ -65,5 +66,6 @@ app.MapLogin();
 app.MapConvites();
 app.MapPerfil();
 app.MapColaboradores();
+app.MapCatalogos();
 
 app.Run();
