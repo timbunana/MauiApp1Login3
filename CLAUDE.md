@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > O produto se chama **CampoSeguro** (`br.com.camposeguro.app`). O repositório e a pasta raiz ainda usam o nome antigo `MauiApp1Login3` — renomear o remoto é decisão do dono do repositório. O projeto, o namespace e o `ApplicationId` já estão renomeados.
 >
-> **`ARQUITETURA.md` descreve o produto alvo**: três aplicações (plataforma, painel da empresa, app do colaborador) sobre um banco PostgreSQL compartilhado, com multi-tenancy e sincronização offline. Hoje existem o app (ainda com autenticação falsa e catálogo fixo no código), a camada de dados — `CampoSeguro.Domain`, `CampoSeguro.Data` e `CampoSeguro.Migrator`, documentados em **`BANCO.md`** — e a `CampoSeguro.Platform.Api` (ver "Plataforma" abaixo). Leia a arquitetura antes de evoluir o app, porque o catálogo vai passar a vir do servidor.
+> **`ARQUITETURA.md` descreve o produto alvo**: três aplicações (plataforma, painel da empresa, app do colaborador) sobre um banco PostgreSQL compartilhado, com multi-tenancy e sincronização offline. Hoje existem o app (ainda com autenticação falsa e catálogo fixo no código), a camada de dados — `CampoSeguro.Domain`, `CampoSeguro.Data` e `CampoSeguro.Migrator`, documentados em **`BANCO.md`** — a `CampoSeguro.Platform.Api` (ver "Plataforma" abaixo) e o começo da `CampoSeguro.Manager.Api` (ver "Painel" abaixo). Os frontends web ainda não existem. Leia a arquitetura antes de evoluir o app, porque o catálogo vai passar a vir do servidor.
 
 App .NET MAUI para registro de **APR (Análise Preliminar de Risco)** em campo — checklist de EPIs/condições de segurança, captura de foto como evidência e geração de um PDF do registro. Escopo atual coberto: Telecomunicações (trabalho em altura e no mesmo nível).
 
@@ -18,9 +18,23 @@ UI, identificadores e comentários são em **pt-BR** — mantenha essa convenç�
 
 ## Build e execução
 
-Não há projeto de testes, lint ou CI neste repositório. Toda a verificação hoje é build + execução manual.
+Não há lint nem CI. O app MAUI é verificado por build e execução manual; o backend tem testes automatizados.
 
-**Para testar contra um banco descartável**, use os binários do PostgreSQL 18 instalado (`C:\Program Files\PostgreSQL\18\bin`): `initdb -D <scratch>\pgdata -U postgres -A trust` e `pg_ctl ... -o "-p 45432 -c listen_addresses=localhost" start`. Antes de escolher a porta, confira `netsh interface ipv4 show excludedportrange protocol=tcp`: o Windows reserva faixas que mudam a cada boot e o bind falha com "Permission denied" (a 55432 já caiu numa delas). O `pg_ctl start` não devolve o console; rode em segundo plano.
+### Testes (`CampoSeguro.Testes`)
+
+xUnit v3 com o Microsoft.Testing.Platform (o `global.json` da raiz faz o opt-in que o `dotnet test` do .NET 10 exige). Cobre domínio, as regras do banco (CHECKs, índices, FKs compostas e os triggers, em SQL puro), o filtro de tenant do EF e as duas APIs inteiras em memória (`WebApplicationFactory`), inclusive o fluxo Plataforma → convite → Painel.
+
+```powershell
+$env:CAMPOSEGURO_TESTE_DB = "Host=localhost;Port=45432;Username=postgres"   # servidor, sem Database
+dotnet test --project CampoSeguro.Testes
+```
+
+- Cada execução cria um banco `camposeguro_teste_*`, aplica as migrations reais e o apaga no fim. **Nunca aponte `CAMPOSEGURO_TESTE_DB` para produção.**
+- Sem a variável, os testes de banco e de API são **pulados** (não falham) e só os de domínio rodam.
+- Os testes não limpam dados entre si: cada um cria as próprias empresas com CNPJ e e-mail aleatórios (`Infra/Gerar`, `Infra/Pessoas`, `Infra/Cenario`). Mantenha assim; não conte linhas de tabela inteira.
+- As fábricas usam `WebApplicationFactory<OpcoesJwt>` de cada API, não `Program`: as duas APIs têm um `Program` global e o nome seria ambíguo.
+
+**Para ter um servidor descartável**, use os binários do PostgreSQL 18 instalado (`C:\Program Files\PostgreSQL\18\bin`): `initdb -D <scratch>\pgdata -U postgres -A trust` e `pg_ctl ... -o "-p 45432 -c listen_addresses=localhost" start`. Antes de escolher a porta, confira `netsh interface ipv4 show excludedportrange protocol=tcp`: o Windows reserva faixas que mudam a cada boot e o bind falha com "Permission denied" (a 55432 já caiu numa delas). O `pg_ctl start` não devolve o console; rode em segundo plano.
 
 **O SDK está instalado em escopo de usuário** (sem admin) em `%LOCALAPPDATA%\Microsoft\dotnet` e **não está no PATH**. Só a workload `maui-windows` está instalada — builds de Android/iOS ainda exigem `dotnet workload install maui` (+ Android SDK/JDK).
 
@@ -97,7 +111,18 @@ Regras que não são óbvias pelo código:
 - **Toda rota exige autenticação por padrão** (política de fallback); só o login tem `AllowAnonymous`. A cada requisição o token é conferido contra `administrador_plataforma.ativo`, então desativar um administrador corta o acesso na hora.
 - **O link do convite leva o token no fragmento** (`.../convite#<token>`), para não aparecer em log de acesso nem no `Referer`. A página de aceite (etapa 3) precisa ler o fragmento e enviar o token por POST.
 - Sem serviço de e-mail, o link volta na resposta para o administrador repassar; é o caminho oficial (ARQUITETURA §5), não um contorno.
-- O login tem limite de 10 tentativas por minuto por IP. Atrás do Nginx, configure `ForwardedHeaders`, senão o limite vira global.
+- O login tem limite de 10 tentativas por minuto por IP (`Login:TentativasPorMinuto`). Atrás do Nginx, configure `ForwardedHeaders`, senão o limite vira global.
+
+## Painel (`CampoSeguro.Manager.Api`)
+
+Backend do gestor da empresa-cliente. Mesma estrutura da Plataforma, porta 5090, e exige `CAMPOSEGURO_DB` e `Jwt__Chave` (**diferente** da chave da Plataforma). Rotas até agora: `POST /autenticacao/login` (só gestor; técnico com a senha certa recebe 403), `POST /convites/consultar` e `POST /convites/aceitar` (abertas, para qualquer colaborador definir a senha pelo link) e `GET /eu`.
+
+Regras que não são óbvias pelo código:
+- **O tenant vem só do token**: `ContextoTenantDaRequisicao` lê as claims `tenant` e `sub` a cada consulta. Nada de tenant em corpo, query ou rota.
+- **`IgnoreQueryFilters` só existe em `BuscaSemTenant.cs`**, para o que acontece antes de se saber a empresa (login por e-mail, convite pelo hash do token, conferência do token). Toda consulta ali filtra por uma chave que identifica uma pessoa só; nunca liste nada por esse caminho.
+- Toda rota exige **gestor** autenticado por padrão (política de fallback com `RequireRole`); login e convites têm `AllowAnonymous` explícito. A cada requisição o token é conferido contra o banco (ativo, mesma empresa, ainda gestor).
+- O aceite marca o convite como usado com `UPDATE ... WHERE usado_em IS NULL` antes de gravar a senha: é o que decide entre duas abas abrindo o mesmo link. Redefinição de senha também revoga as `sessao_dispositivo` do usuário.
+- Link inválido, vencido, usado ou revogado dão **a mesma resposta**, de propósito.
 
 ## Limitações conhecidas
 

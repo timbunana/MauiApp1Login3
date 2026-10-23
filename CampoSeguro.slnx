@@ -1,7 +1,9 @@
 <Solution>
   <Project Path="CampoSeguro.Data/CampoSeguro.Data.csproj" />
   <Project Path="CampoSeguro.Domain/CampoSeguro.Domain.csproj" />
+  <Project Path="CampoSeguro.Manager.Api/CampoSeguro.Manager.Api.csproj" />
   <Project Path="CampoSeguro.Migrator/CampoSeguro.Migrator.csproj" />
   <Project Path="CampoSeguro.Platform.Api/CampoSeguro.Platform.Api.csproj" />
+  <Project Path="CampoSeguro.Testes/CampoSeguro.Testes.csproj" />
   <Project Path="CampoSeguro/CampoSeguro.csproj" />
 </Solution>

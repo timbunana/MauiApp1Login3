@@ -44,7 +44,7 @@ Toda tabela de negócio tem `tenant_id`. O isolamento é garantido em três cama
 2. **Gravação conferida.** No `SaveChanges`, um registro novo herda o tenant do contexto. Um registro com outro tenant é recusado, e o `tenant_id` de um registro existente não pode ser alterado.
 3. **Chaves estrangeiras compostas.** Toda relação entre tabelas de negócio é `(tenant_id, x_id) → (tenant_id, id)`. Assim o próprio banco impede, por exemplo, uma APR da empresa B que aponte para o catálogo da empresa A, mesmo que o celular envie um GUID forjado.
 
-`IgnoreQueryFilters()` só pode aparecer em dois lugares: na **Plataforma**, que enxerga todos os tenants, e na **busca de login** (por e-mail ou pelo hash do token), que acontece antes de se saber o tenant. Em qualquer outro lugar, é bug. Na Plataforma ele está concentrado em `CampoSeguro.Platform.Api/TodosOsTenants.cs`.
+`IgnoreQueryFilters()` só pode aparecer em dois lugares: na **Plataforma**, que enxerga todos os tenants, e na **busca de login** (por e-mail ou pelo hash do token), que acontece antes de se saber o tenant. Em qualquer outro lugar, é bug. Na Plataforma ele está concentrado em `CampoSeguro.Platform.Api/TodosOsTenants.cs`; no Painel, em `CampoSeguro.Manager.Api/BuscaSemTenant.cs`. As regras desta página são cobertas por `CampoSeguro.Testes/Banco`.
 
 Senhas e tokens nunca são gravados em claro: o hash é sempre gerado por `CampoSeguro.Data/Seguranca` (`Senhas` para `senha_hash`, `Tokens` para `token_hash`).
 

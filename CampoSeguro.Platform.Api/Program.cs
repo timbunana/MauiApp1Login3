@@ -34,12 +34,13 @@ builder.Services.AddAutenticacaoPlataforma(jwt);
 
 // Atrás do Nginx todo login chega do mesmo IP e o limite passa a ser global — aceitável para uma
 // equipe pequena. Quando a infra existir, configurar ForwardedHeaders com o IP do proxy.
+var tentativasLogin = builder.Configuration.GetValue("Login:TentativasPorMinuto", 10);
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     o.AddPolicy(LoginEndpoints.PoliticaLimite, http => RateLimitPartition.GetFixedWindowLimiter(
         http.Connection.RemoteIpAddress?.ToString() ?? "desconhecido",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = tentativasLogin, Window = TimeSpan.FromMinutes(1) }));
 });
 
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));

@@ -15,8 +15,8 @@ Ordem de dependência definida no `ARQUITETURA.md` §9. As etapas 1 a 4 são pr�
 | # | Etapa | Status | Referência |
 |---|---|---|---|
 | 1 | `Domain` + `Data` + `Migrator`: banco, multi-tenancy, migrations | ✅ 2026-10-15 | `1562ce0`, `BANCO.md` |
-| 2 | `Platform.Api` mínima: criar tenant e primeiro gestor | ✅ 2026-10-23 | —, `CLAUDE.md` § Plataforma |
-| 3 | `Manager.Api` + `Manager.Web`: colaboradores, convites, catálogos | ⬜ | |
+| 2 | `Platform.Api` mínima: criar tenant e primeiro gestor | ✅ 2026-10-23 | `fa68ea2`, `CLAUDE.md` § Plataforma |
+| 3 | `Manager.Api` + `Manager.Web`: colaboradores, convites, catálogos | 🔄 desde 2026-10-23 | `CLAUDE.md` § Painel |
 | 4 | `Field.Api`: autenticação, download de catálogo, recebimento de APR idempotente | ⬜ | |
 | 5 | Adaptar o app MAUI: SQLite, fila de sincronização, catálogo remoto, compressão de foto | ⬜ | |
 | 6 | Indicadores no Painel | ⛔ | indicadores não definidos |
@@ -25,10 +25,17 @@ Ordem de dependência definida no `ARQUITETURA.md` §9. As etapas 1 a 4 são pr�
 ### Escopo das etapas em aberto
 
 **3. `Manager.Api` + `Manager.Web`**
+
+Feito na API: login do gestor, `GET /eu`, consulta e aceite de convite (vale para gestor e técnico; redefinição de senha revoga as sessões dos aparelhos).
+
+Falta:
 - Colaboradores: cadastrar, desativar, anonimizar (LGPD).
-- Convites: gerar, reenviar (revogando o anterior), exibir o link para o gestor copiar e enviar por e-mail.
-- **Página e endpoint de aceite do convite** (definir a senha). O link que a Plataforma já emite aponta para ela e leva o token no fragmento (`#`): a página lê o fragmento e envia o token por POST. Até existir, os gestores convidados não conseguem entrar.
+- Convites do gestor para os técnicos: gerar, reenviar (revogando o anterior), exibir o link para copiar.
+- Redefinição de senha: o gestor gera o link para um técnico; e um caminho para o **próprio gestor** que esqueceu a senha (pela Plataforma, até existir e-mail). Hoje a Plataforma responde "use Esqueci minha senha", que ainda não existe.
 - Catálogos: editar o rascunho, publicar e abrir a próxima versão.
+- **`Manager.Web`**, incluindo a página de aceite do convite: lê o token do fragmento (`#`) do link e chama `POST /convites/consultar` e `/convites/aceitar`. Até existir, aceitar um convite exige chamar a API diretamente.
+
+**Fora de qualquer etapa: `Platform.Web`.** O frontend da Administração não está no plano; hoje a Plataforma só é operável pela API. Sugestão: fazer junto com o `Manager.Web`, na mesma tecnologia.
 
 **4. `Field.Api`**
 - Login com `sessao_dispositivo` e refresh token.
@@ -51,7 +58,8 @@ Não depende das etapas acima.
 | Item | Status | Observação |
 |---|---|---|
 | Validar o app no Android (câmera, permissões, `Share`) | ⬜ | Maior risco do que já existe; exige workload `maui`, Android SDK e JDK |
-| Projeto de testes automatizados | ⬜ | Os testes do banco (31 casos SQL + 13 EF) rodaram fora do repositório; trazê-los com Testcontainers ou PostgreSQL local |
+| Projeto de testes automatizados | ✅ 2026-10-23 | `CampoSeguro.Testes`, 79 casos (domínio, banco, Plataforma e Painel); precisa de um PostgreSQL em `CAMPOSEGURO_TESTE_DB` |
+| CI rodando os testes | ⬜ | Precisa de um PostgreSQL no runner |
 | Infra: Docker Compose, Nginx, HTTPS | ⛔ | Depende de onde o servidor vai ficar |
 | Backup do PostgreSQL fora da máquina | ⛔ | Idem; item que não deve ser cortado |
 | E-mail transacional com SPF e DKIM | ⬜ | Necessário para os convites |
@@ -62,7 +70,7 @@ Não depende das etapas acima.
 | Decisão | Com quem | Bloqueia |
 |---|---|---|
 | Onde o servidor vai ficar | TI | Infra, backup, etapa 4 em produção |
-| Tecnologia do `Manager.Web` (Blazor, React…) | Equipe | Etapa 3 |
+| Tecnologia do `Manager.Web` e do `Platform.Web` (Blazor, React…) | Equipe | Frontends da etapa 3 e da Administração |
 | Algoritmo de hash de senha: adotado o PBKDF2 do `PasswordHasher` do Identity na etapa 2; confirmar ou trocar por Argon2 | Equipe | Nada: o formato é versionado e a troca regrava o hash no login |
 | Indicadores do dashboard | Produto | Etapa 6 |
 | Suportar CNPJ alfanumérico (Receita, desde jul/2026) | Produto | Cadastro de empresas novas com esse formato |
@@ -86,9 +94,8 @@ As decisões já tomadas ficam no `ARQUITETURA.md` §11.
 - O banco não confere se o item de uma versão pertence ao mesmo catálogo.
 - CNPJ só numérico no CHECK e na validação; o alfanumérico é recusado.
 
-**Platform.Api** (detalhes no `CLAUDE.md`)
-- Limite de tentativas de login por IP: atrás do Nginx vira global até configurar `ForwardedHeaders`.
-- Os testes de ponta a ponta (35 casos) rodaram por script fora do repositório.
+**APIs** (detalhes no `CLAUDE.md`)
+- Limite de tentativas de login por IP, na Plataforma e no Painel: atrás do Nginx vira global até configurar `ForwardedHeaders`.
 
 ## Histórico
 
@@ -96,4 +103,5 @@ As decisões já tomadas ficam no `ARQUITETURA.md` §11.
 |---|---|---|
 | 2026-10-15 | Etapa 1 concluída: modelo de dados, filtro de tenant, migrations `Inicial` e `Imutabilidade`, `BANCO.md` | `1562ce0` |
 | 2026-10-15 | Criado este roadmap | `00aff5a` |
-| 2026-10-23 | Etapa 2 concluída: `Platform.Api` (login JWT, empresas, convite e reenvio de gestor), `Data/Seguranca`, `--criar-admin` no Migrator | — |
+| 2026-10-23 | Etapa 2 concluída: `Platform.Api` (login JWT, empresas, convite e reenvio de gestor), `Data/Seguranca`, `--criar-admin` no Migrator | `fa68ea2` |
+| 2026-10-23 | Projeto `CampoSeguro.Testes` (79 casos). Etapa 3 iniciada: `Manager.Api` com login do gestor, `/eu` e aceite de convite | — |
