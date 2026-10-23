@@ -5,7 +5,6 @@ using CampoSeguro.Data.Seguranca;
 using CampoSeguro.Domain;
 using CampoSeguro.Platform.Api.Autenticacao;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace CampoSeguro.Platform.Api.Empresas;
 
@@ -25,6 +24,7 @@ public static class EmpresasEndpoints
         grupo.MapPost("/", Criar);
         grupo.MapPost("/{id:guid}/gestores", ConvidarGestor);
         grupo.MapPost("/{id:guid}/gestores/{gestorId:guid}/convite", ReenviarConvite);
+        grupo.MapPost("/{id:guid}/gestores/{gestorId:guid}/redefinicao-senha", RedefinirSenha);
     }
 
     private static async Task<IResult> Listar(CampoSeguroDbContext db, CancellationToken ct)
@@ -75,7 +75,7 @@ public static class EmpresasEndpoints
 
         var empresa = new Tenant { Nome = nome, Documento = documento };
         var gestor = NovoUsuarioGestor(empresa.Id, gestorNome, gestorEmail);
-        var (convite, token) = NovoConvite(gestor);
+        var (convite, token) = LinksDeAcesso.Novo(gestor, TipoConvite.Convite);
 
         db.AddRange(empresa, gestor, convite);
         if (!await Gravar(db, ct))
@@ -104,7 +104,7 @@ public static class EmpresasEndpoints
             return EmailOcupado();
 
         var gestor = NovoUsuarioGestor(id, nome, email);
-        var (convite, token) = NovoConvite(gestor);
+        var (convite, token) = LinksDeAcesso.Novo(gestor, TipoConvite.Convite);
 
         db.AddRange(gestor, convite);
         if (!await Gravar(db, ct))
@@ -118,12 +118,21 @@ public static class EmpresasEndpoints
             Resumo(gestor, convite), new ConviteEmitido(opcoes.Link(token), convite.ExpiraEm)));
     }
 
+    /// <summary>Para quem ainda não definiu a senha: revoga o convite pendente e emite outro.</summary>
+    private static Task<IResult> ReenviarConvite(Guid id, Guid gestorId, CampoSeguroDbContext db, OpcoesConvite opcoes,
+        ClaimsPrincipal usuario, ILoggerFactory logs, CancellationToken ct) =>
+        EmitirLink(id, gestorId, TipoConvite.Convite, db, opcoes, usuario, logs, ct);
+
     /// <summary>
-    /// Revoga o convite pendente e emite outro. O banco aceita só um pendente por usuário e tipo,
-    /// por isso a revogação é gravada antes da inclusão, na mesma transação.
+    /// Para o gestor que esqueceu a senha. Sem e-mail, a Plataforma é o único caminho: o gestor não
+    /// consegue entrar no Painel para pedir, e nenhum outro gestor da empresa tem esse poder sobre ele.
     /// </summary>
-    private static async Task<IResult> ReenviarConvite(Guid id, Guid gestorId, CampoSeguroDbContext db, OpcoesConvite opcoes,
-        ClaimsPrincipal usuario, ILoggerFactory logs, CancellationToken ct)
+    private static Task<IResult> RedefinirSenha(Guid id, Guid gestorId, CampoSeguroDbContext db, OpcoesConvite opcoes,
+        ClaimsPrincipal usuario, ILoggerFactory logs, CancellationToken ct) =>
+        EmitirLink(id, gestorId, TipoConvite.RedefinicaoSenha, db, opcoes, usuario, logs, ct);
+
+    private static async Task<IResult> EmitirLink(Guid id, Guid gestorId, TipoConvite tipo, CampoSeguroDbContext db,
+        OpcoesConvite opcoes, ClaimsPrincipal usuario, ILoggerFactory logs, CancellationToken ct)
     {
         var gestor = await db.DeTodosOsTenants<Usuario>()
             .SingleOrDefaultAsync(u => u.Id == gestorId && u.TenantId == id && u.Papel == Papel.Gestor, ct);
@@ -132,26 +141,25 @@ public static class EmpresasEndpoints
             return Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Gestor não encontrado nesta empresa.");
         if (!gestor.Ativo)
             return Conflito("O gestor está desativado.");
-        if (gestor.SenhaHash is not null)
-            return Conflito("O gestor já definiu a senha. Para recuperar o acesso, ele deve usar \"Esqueci minha senha\".");
+        if (tipo == TipoConvite.Convite && gestor.SenhaHash is not null)
+            return Conflito("O gestor já definiu a senha. Se ele a esqueceu, gere um link de redefinição de senha.");
+        if (tipo == TipoConvite.RedefinicaoSenha && gestor.SenhaHash is null)
+            return Conflito("O gestor ainda não definiu a senha. Reenvie o convite.");
 
-        await using var transacao = await db.Database.BeginTransactionAsync(ct);
-
-        var agora = DateTimeOffset.UtcNow;
-        foreach (var anterior in await ConvitesPendentes(db, [gestor.Id]).ToListAsync(ct))
-            anterior.RevogadoEm = agora;
-        await db.SaveChangesAsync(ct);
-
-        var (convite, token) = NovoConvite(gestor);
-        db.Convites.Add(convite);
-        if (!await Gravar(db, ct))
-            return Conflito("Outro convite foi emitido ao mesmo tempo. Consulte a empresa e tente de novo.");
-
-        await transacao.CommitAsync(ct);
+        Convite convite;
+        string token;
+        try
+        {
+            (convite, token) = await LinksDeAcesso.Reemitir(db, db.DeTodosOsTenants<Convite>().Where(c => c.UsuarioId == gestor.Id), gestor, tipo, ct);
+        }
+        catch (DbUpdateException e) when (e.ViolouUnicidade())
+        {
+            return Conflito("Outro link foi emitido ao mesmo tempo. Consulte a empresa e tente de novo.");
+        }
 
         logs.CreateLogger(nameof(EmpresasEndpoints)).LogInformation(
-            "Administrador {AdministradorId} reenviou o convite do gestor {UsuarioId} na empresa {TenantId}",
-            usuario.AdministradorId(), gestor.Id, id);
+            "Administrador {AdministradorId} emitiu link de {Tipo} para o gestor {UsuarioId} na empresa {TenantId}",
+            usuario.AdministradorId(), tipo, gestor.Id, id);
 
         return Results.Ok(new ConviteEmitido(opcoes.Link(token), convite.ExpiraEm));
     }
@@ -164,19 +172,6 @@ public static class EmpresasEndpoints
         EmailNormalizado = Emails.Normalizar(email),
         Papel = Papel.Gestor,
     };
-
-    private static (Convite Convite, string Token) NovoConvite(Usuario gestor)
-    {
-        var token = Tokens.Gerar();
-        return (new Convite
-        {
-            TenantId = gestor.TenantId,
-            UsuarioId = gestor.Id,
-            Tipo = TipoConvite.Convite,
-            TokenHash = Tokens.Hash(token),
-            ExpiraEm = DateTimeOffset.UtcNow + Convite.Validade,
-        }, token);
-    }
 
     /// <summary>Convite de primeiro acesso ainda não usado nem revogado; pode estar vencido.</summary>
     private static IQueryable<Convite> ConvitesPendentes(CampoSeguroDbContext db, List<Guid> usuarioIds) =>
@@ -192,19 +187,10 @@ public static class EmpresasEndpoints
 
     private static ResumoGestor Resumo(Usuario u, Convite? pendente)
     {
-        var situacao =
-            !u.Ativo ? SituacaoGestor.Desativado
-            : u.SenhaHash is not null ? SituacaoGestor.Ativo
-            : pendente is not null && pendente.ExpiraEm > DateTimeOffset.UtcNow ? SituacaoGestor.ConvitePendente
-            : SituacaoGestor.ConviteExpirado;
-
-        return new ResumoGestor(u.Id, u.Nome, u.Email, situacao, situacao == SituacaoGestor.Ativo ? null : pendente?.ExpiraEm);
+        var situacao = u.Situacao(pendente, DateTimeOffset.UtcNow);
+        return new ResumoGestor(u.Id, u.Nome, u.Email, situacao, situacao == SituacaoAcesso.Ativo ? null : pendente?.ExpiraEm);
     }
 
-    /// <summary>
-    /// As consultas de unicidade acima dão a mensagem certa no caso comum; esta é a rede de segurança
-    /// para duas requisições simultâneas, quando quem decide é o índice único do banco.
-    /// </summary>
     private static async Task<bool> Gravar(CampoSeguroDbContext db, CancellationToken ct)
     {
         try
@@ -212,7 +198,7 @@ public static class EmpresasEndpoints
             await db.SaveChangesAsync(ct);
             return true;
         }
-        catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        catch (DbUpdateException e) when (e.ViolouUnicidade())
         {
             return false;
         }

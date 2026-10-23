@@ -30,6 +30,8 @@ CampoSeguro.Manager.Api   +  CampoSeguro.Manager.Web
 CampoSeguro.Field.Api     +  CampoSeguro.Field.App (MAUI)
 ```
 
+**Cada aplicação terá repositório próprio** (decidido em 2026-10-23). `Domain`, `Data` e `Migrator` ficam num repositório "núcleo", dono do modelo e das migrações, e chegam às APIs como dependência versionada. A forma (pacote NuGet privado, submódulo…) ainda está em aberto; ver `ROADMAP.md`. Enquanto tudo vive num repositório só, nenhuma API referencia outra, para que a separação seja só mover pastas.
+
 `Domain` e `Data` são **bibliotecas de classe compartilhadas**. Sem isso, a mesma tabela acabaria com três mapeamentos mantidos em paralelo — e no dia em que divergirem, o dado quebra em silêncio.
 
 **As migrações têm um dono só.** Nenhum dos três backends aplica migração na inicialização: isso os faria disputar o banco e, cedo ou tarde, corromper o estado. O `Migrator` roda no deploy, sozinho.

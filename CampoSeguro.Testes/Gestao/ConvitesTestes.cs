@@ -53,7 +53,41 @@ public sealed class ConvitesTestes(BancoDeTeste banco) : IAsyncDisposable
 
         // E a Plataforma passa a mostrar o gestor como ativo.
         var detalhe = (await admin.GetFromJsonAsync<DetalheEmpresa>($"/empresas/{criada.Empresa.Id}", PlataformaApi.Json))!;
-        Assert.Equal(SituacaoGestor.Ativo, Assert.Single(detalhe.Gestores).Situacao);
+        Assert.Equal(SituacaoAcesso.Ativo, Assert.Single(detalhe.Gestores).Situacao);
+    }
+
+    [Fact]
+    public async Task Gestor_que_esqueceu_a_senha_recupera_pela_plataforma()
+    {
+        banco.Exigir();
+        var empresa = await Pessoas.NovaEmpresa(banco);
+        var gestor = await Pessoas.NovoUsuario(banco, empresa, Papel.Gestor);
+        var admin = await plataforma.ClienteAutenticado();
+        var rota = $"/empresas/{empresa}/gestores/{gestor.Id}";
+
+        // Com senha definida, o caminho é a redefinição, não o reenvio do convite.
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsync($"{rota}/convite", null)).StatusCode);
+        var resposta = await admin.PostAsync($"{rota}/redefinicao-senha", null);
+        Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
+        var link = (await resposta.Content.ReadFromJsonAsync<ConviteEmitido>(PlataformaApi.Json))!.Link;
+
+        var consulta = await (await gestao.Consultar(GestaoApi.TokenDoLink(link))).Content.ReadFromJsonAsync<JsonElement>(PlataformaApi.Json);
+        Assert.Equal("RedefinicaoSenha", consulta.GetProperty("tipo").GetString());
+        Assert.Equal(HttpStatusCode.NoContent, (await gestao.Aceitar(GestaoApi.TokenDoLink(link), NovaSenha)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK, (await gestao.Login(gestor.Email, NovaSenha)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await gestao.Login(gestor.Email, Pessoas.Senha)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Plataforma_so_redefine_senha_de_quem_ja_tem()
+    {
+        var (gestor, _) = await GestorConvidado();
+        var admin = await plataforma.ClienteAutenticado();
+
+        var resposta = await admin.PostAsync($"/empresas/{gestor.TenantId}/gestores/{gestor.Id}/redefinicao-senha", null);
+
+        Assert.Equal(HttpStatusCode.Conflict, resposta.StatusCode);
     }
 
     [Fact]

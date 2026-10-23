@@ -18,21 +18,7 @@ public sealed record DetalheEmpresa(
     Guid Id, string Nome, string Documento, SituacaoAssinatura SituacaoAssinatura, DateTimeOffset CriadaEm,
     IReadOnlyList<ResumoGestor> Gestores);
 
-public enum SituacaoGestor
-{
-    /// <summary>Já definiu a senha.</summary>
-    Ativo,
-
-    /// <summary>Tem um link válido e ainda não usado.</summary>
-    ConvitePendente,
-
-    /// <summary>Não definiu a senha e não tem link válido: é preciso reenviar o convite.</summary>
-    ConviteExpirado,
-
-    Desativado,
-}
-
-public sealed record ResumoGestor(Guid Id, string Nome, string Email, SituacaoGestor Situacao, DateTimeOffset? ConviteExpiraEm);
+public sealed record ResumoGestor(Guid Id, string Nome, string Email, SituacaoAcesso Situacao, DateTimeOffset? ConviteExpiraEm);
 
 /// <summary>O link carrega o token em claro. Ele só existe nesta resposta: o banco guarda o hash.</summary>
 public sealed record ConviteEmitido(string Link, DateTimeOffset ExpiraEm);

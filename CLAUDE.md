@@ -90,7 +90,8 @@ Regras que não são óbvias pelo código:
 - **A migration `Imutabilidade` é escrita à mão** (triggers). Ao regerar a `Inicial`, copie esse arquivo antes e restaure depois.
 - **Nenhum backend aplica migration na inicialização.** Só o Migrator.
 - Os pacotes do EF estão alinhados em 10.0.13 com uma referência explícita ao `Relational`; sem ela, o Npgsql traz o 10.0.4 para quem referencia `Data` e o build quebra com `CS1705`.
-- **Senhas e tokens passam por `Data/Seguranca`**: `Senhas` (PBKDF2 do `PasswordHasher` do Identity, formato versionado) e `Tokens` (256 bits aleatórios; o banco guarda só o SHA-256). Não gere hash nem token em outro lugar. Normalização e validação de e-mail e CNPJ ficam em `Domain/Documentos.cs`.
+- **Senhas e tokens passam por `Data/Seguranca`**: `Senhas` (PBKDF2 do `PasswordHasher` do Identity, formato versionado), `Tokens` (256 bits aleatórios; o banco guarda só o SHA-256) e `LinksDeAcesso` (emite e reemite convites). Não gere hash nem token em outro lugar.
+- **Cada aplicação vai para um repositório próprio.** Por isso nenhuma API referencia outra: o que é comum fica em `Domain`/`Data`, que serão o pacote compartilhado. Não crie dependência entre APIs, nem mesmo para reaproveitar código. Só `CampoSeguro.Testes` enxerga as duas, e será dividido junto. Normalização e validação de e-mail e CNPJ ficam em `Domain/Documentos.cs`.
 - O primeiro administrador da Plataforma é criado por `CampoSeguro.Migrator --criar-admin "Nome" email` (senha lida do terminal sem eco ou de `CAMPOSEGURO_SENHA_ADMIN`, nunca de argumento).
 
 ## Plataforma (`CampoSeguro.Platform.Api`)
@@ -104,7 +105,7 @@ $env:Convites__UrlAceite = "https://gestao.camposeguro.com.br/convite"
 dotnet run --project CampoSeguro.Platform.Api   # sobe em http://localhost:5080; OpenAPI em /openapi/v1.json (só Development)
 ```
 
-Sem qualquer uma das três variáveis a API recusa subir. Rotas: `POST /autenticacao/login`; `GET /empresas`, `GET /empresas/{id}`, `POST /empresas` (empresa + primeiro gestor + convite numa transação), `POST /empresas/{id}/gestores`, `POST /empresas/{id}/gestores/{gestorId}/convite` (reenvio: revoga o pendente e emite outro).
+Sem qualquer uma das três variáveis a API recusa subir. Rotas: `POST /autenticacao/login`; `GET /empresas`, `GET /empresas/{id}`, `POST /empresas` (empresa + primeiro gestor + convite numa transação), `POST /empresas/{id}/gestores`, `POST /empresas/{id}/gestores/{gestorId}/convite` (reenvio para quem ainda não tem senha: revoga o pendente e emite outro) e `POST /empresas/{id}/gestores/{gestorId}/redefinicao-senha` (o único caminho para um gestor que esqueceu a senha, enquanto não há e-mail).
 
 Regras que não são óbvias pelo código:
 - **`IgnoreQueryFilters` só existe em `TodosOsTenants.cs`.** O contexto da Plataforma não tem tenant, então qualquer consulta a entidade de tenant fora de `db.DeTodosOsTenants<T>()` devolve vazio. Nunca copie esse arquivo para outro backend.
@@ -115,7 +116,10 @@ Regras que não são óbvias pelo código:
 
 ## Painel (`CampoSeguro.Manager.Api`)
 
-Backend do gestor da empresa-cliente. Mesma estrutura da Plataforma, porta 5090, e exige `CAMPOSEGURO_DB` e `Jwt__Chave` (**diferente** da chave da Plataforma). Rotas até agora: `POST /autenticacao/login` (só gestor; técnico com a senha certa recebe 403), `POST /convites/consultar` e `POST /convites/aceitar` (abertas, para qualquer colaborador definir a senha pelo link) e `GET /eu`.
+Backend do gestor da empresa-cliente. Mesma estrutura da Plataforma, porta 5090, e exige `CAMPOSEGURO_DB`, `Jwt__Chave` (**diferente** da chave da Plataforma) e `Convites__UrlAceite` (a mesma da Plataforma). Rotas até agora:
+- `POST /autenticacao/login` (só gestor; técnico com a senha certa recebe 403) e `GET /eu`.
+- `POST /convites/consultar` e `POST /convites/aceitar`: abertas, para qualquer colaborador definir a senha pelo link.
+- `/colaboradores`: `GET` (só ativos; `?incluirDesativados=true` para todos), `GET /{id}`, `POST` (cadastra e devolve o link do convite; sem `papel`, é técnico) e as ações `POST /{id}/convite`, `/redefinicao-senha`, `/desativar`, `/reativar`, `/anonimizar`.
 
 Regras que não são óbvias pelo código:
 - **O tenant vem só do token**: `ContextoTenantDaRequisicao` lê as claims `tenant` e `sub` a cada consulta. Nada de tenant em corpo, query ou rota.
@@ -123,6 +127,9 @@ Regras que não são óbvias pelo código:
 - Toda rota exige **gestor** autenticado por padrão (política de fallback com `RequireRole`); login e convites têm `AllowAnonymous` explícito. A cada requisição o token é conferido contra o banco (ativo, mesma empresa, ainda gestor).
 - O aceite marca o convite como usado com `UPDATE ... WHERE usado_em IS NULL` antes de gravar a senha: é o que decide entre duas abas abrindo o mesmo link. Redefinição de senha também revoga as `sessao_dispositivo` do usuário.
 - Link inválido, vencido, usado ou revogado dão **a mesma resposta**, de propósito.
+- **Redefinição de senha pelo Painel só vale para técnico.** O link volta para quem o gerou; se um gestor pudesse gerar o de outro gestor, assumiria a conta dele. Gestor recupera a senha pela Plataforma.
+- Desativar revoga os links pendentes e as sessões dos aparelhos na mesma gravação. Anonimizar (`Usuario.Anonimizar`) exige estar desativado, é irreversível e não toca no `apr.autor_nome`.
+- Emissão de link (`LinksDeAcesso` em `Data/Seguranca`) e situação do acesso (`Usuario.Situacao`) são compartilhadas com a Plataforma: mude lá, não em cada API.
 
 ## Limitações conhecidas
 

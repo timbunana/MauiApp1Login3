@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using CampoSeguro.Domain;
 using CampoSeguro.Platform.Api.Empresas;
 using CampoSeguro.Testes.Infra;
 
@@ -31,7 +32,7 @@ public sealed class EmpresasTestes(BancoDeTeste banco) : IAsyncDisposable
         var criada = (await resposta.Content.ReadFromJsonAsync<EmpresaCriada>(PlataformaApi.Json))!;
         Assert.Equal($"/empresas/{criada.Empresa.Id}", resposta.Headers.Location?.OriginalString);
         Assert.Equal(cnpj, criada.Empresa.Documento);
-        Assert.Equal(SituacaoGestor.ConvitePendente, criada.Gestor.Situacao);
+        Assert.Equal(SituacaoAcesso.ConvitePendente, criada.Gestor.Situacao);
 
         // O token vai no fragmento, e o banco guarda só o SHA-256 dele.
         Assert.StartsWith($"{PlataformaApi.UrlAceite}#", criada.Convite.Link);
@@ -113,7 +114,7 @@ public sealed class EmpresasTestes(BancoDeTeste banco) : IAsyncDisposable
 
         var detalhe = (await cliente.GetFromJsonAsync<DetalheEmpresa>($"/empresas/{criada.Empresa.Id}", PlataformaApi.Json))!;
         var gestor = Assert.Single(detalhe.Gestores);
-        Assert.Equal(SituacaoGestor.ConvitePendente, gestor.Situacao);
+        Assert.Equal(SituacaoAcesso.ConvitePendente, gestor.Situacao);
         // O banco guarda microssegundos; o .NET, 100 ns.
         Assert.Equal(criada.Convite.ExpiraEm, gestor.ConviteExpiraEm!.Value, TimeSpan.FromMilliseconds(1));
     }
@@ -139,7 +140,7 @@ public sealed class EmpresasTestes(BancoDeTeste banco) : IAsyncDisposable
         await banco.Sql($"UPDATE convite SET criado_em = now() - interval '4 days', expira_em = now() - interval '1 day' WHERE usuario_id = '{criada.Gestor.Id}'");
 
         var detalhe = (await cliente.GetFromJsonAsync<DetalheEmpresa>($"/empresas/{criada.Empresa.Id}", PlataformaApi.Json))!;
-        Assert.Equal(SituacaoGestor.ConviteExpirado, Assert.Single(detalhe.Gestores).Situacao);
+        Assert.Equal(SituacaoAcesso.ConviteExpirado, Assert.Single(detalhe.Gestores).Situacao);
     }
 
     // --- Reenvio
@@ -187,7 +188,7 @@ public sealed class EmpresasTestes(BancoDeTeste banco) : IAsyncDisposable
         await banco.Sql($"UPDATE usuario SET senha_hash = 'x' WHERE id = '{criada.Gestor.Id}'");
         Assert.Equal(HttpStatusCode.Conflict, (await cliente.PostAsync(rota, null)).StatusCode);
         var detalhe = (await cliente.GetFromJsonAsync<DetalheEmpresa>($"/empresas/{criada.Empresa.Id}", PlataformaApi.Json))!;
-        Assert.Equal(SituacaoGestor.Ativo, Assert.Single(detalhe.Gestores).Situacao);
+        Assert.Equal(SituacaoAcesso.Ativo, Assert.Single(detalhe.Gestores).Situacao);
 
         await banco.Sql($"UPDATE usuario SET ativo = false, desativado_em = now() WHERE id = '{criada.Gestor.Id}'");
         Assert.Equal(HttpStatusCode.Conflict, (await cliente.PostAsync(rota, null)).StatusCode);

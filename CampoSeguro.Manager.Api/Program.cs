@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using CampoSeguro.Data;
 using CampoSeguro.Manager.Api;
 using CampoSeguro.Manager.Api.Autenticacao;
+using CampoSeguro.Manager.Api.Colaboradores;
 using CampoSeguro.Manager.Api.Convites;
 using CampoSeguro.Manager.Api.Perfil;
 
@@ -11,7 +12,8 @@ using CampoSeguro.Manager.Api.Perfil;
 //
 // Configuração obrigatória (variáveis de ambiente):
 //   CAMPOSEGURO_DB   connection string do PostgreSQL
-//   Jwt__Chave       segredo do HS256, pelo menos 32 bytes aleatórios, diferente do da Plataforma
+//   Jwt__Chave            segredo do HS256, pelo menos 32 bytes aleatórios, diferente do da Plataforma
+//   Convites__UrlAceite   página de aceite do Painel (a mesma configurada na Plataforma)
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,6 +23,10 @@ if (string.IsNullOrWhiteSpace(conexao))
 
 var jwt = builder.Configuration.GetSection("Jwt").Get<OpcoesJwt>() ?? new OpcoesJwt();
 jwt.Validar();
+
+var convites = builder.Configuration.GetSection("Convites").Get<OpcoesConvite>() ?? new OpcoesConvite();
+convites.Validar();
+builder.Services.AddSingleton(convites);
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IContextoTenant, ContextoTenantDaRequisicao>();
@@ -58,5 +64,6 @@ if (app.Environment.IsDevelopment())
 app.MapLogin();
 app.MapConvites();
 app.MapPerfil();
+app.MapColaboradores();
 
 app.Run();

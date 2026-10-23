@@ -16,6 +16,13 @@ public sealed class BuscaSemTenant(CampoSeguroDbContext db)
     public Task<Usuario?> UsuarioAtivoPorEmail(string emailNormalizado, CancellationToken ct) =>
         db.Usuarios.IgnoreQueryFilters().SingleOrDefaultAsync(u => u.EmailNormalizado == emailNormalizado && u.Ativo, ct);
 
+    /// <summary>
+    /// O e-mail é único entre ativos de <b>todas</b> as empresas (ARQUITETURA §11), então o cadastro
+    /// precisa olhar além do próprio tenant. Devolve só sim ou não, nunca de qual empresa.
+    /// </summary>
+    public Task<bool> EmailEmUsoPorAtivo(string emailNormalizado, CancellationToken ct) =>
+        db.Usuarios.IgnoreQueryFilters().AnyAsync(u => u.EmailNormalizado == emailNormalizado && u.Ativo, ct);
+
     /// <summary>Confere o dono de um token já assinado: mesmo usuário, mesma empresa, ainda ativo e ainda gestor.</summary>
     public Task<bool> GestorAtivo(Guid usuarioId, Guid tenantId, CancellationToken ct) =>
         db.Usuarios.IgnoreQueryFilters().AnyAsync(u => u.Id == usuarioId && u.TenantId == tenantId && u.Ativo && u.Papel == Papel.Gestor, ct);

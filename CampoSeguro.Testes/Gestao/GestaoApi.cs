@@ -18,8 +18,19 @@ public sealed class GestaoApi(BancoDeTeste banco) : WebApplicationFactory<CampoS
         builder.UseEnvironment("Testes");
         builder.UseSetting(CampoSeguroDb.VariavelConexao, banco.Conexao);
         builder.UseSetting("Jwt:Chave", "outra-chave-de-teste-so-do-painel-0123456789");
+        builder.UseSetting("Convites:UrlAceite", PlataformaApi.UrlAceite);
         builder.UseSetting("Login:TentativasPorMinuto", "1000");
     }
+
+    /// <summary>Empresa nova com um gestor já logado.</summary>
+    public async Task<(Guid Empresa, CampoSeguro.Domain.Usuario Gestor, HttpClient Cliente)> EmpresaComGestor()
+    {
+        var empresa = await Pessoas.NovaEmpresa(banco);
+        var gestor = await Pessoas.NovoUsuario(banco, empresa, CampoSeguro.Domain.Papel.Gestor);
+        return (empresa, gestor, await ClienteAutenticado(gestor.Email, Pessoas.Senha));
+    }
+
+    public static string TokenDoLink(string link) => link.Split('#')[1];
 
     public Task<HttpResponseMessage> Login(string email, string senha) =>
         CreateClient().PostAsJsonAsync("/autenticacao/login", new { email, senha }, PlataformaApi.Json);

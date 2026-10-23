@@ -46,6 +46,43 @@ public class Usuario : EntidadeDoTenant
 
     /// <summary>LGPD: nome e e-mail sobrescritos. A APR preserva o nome congelado do autor.</summary>
     public DateTimeOffset? AnonimizadoEm { get; set; }
+
+    /// <param name="convitePendente">Convite de primeiro acesso ainda não usado nem revogado (pode estar vencido).</param>
+    public SituacaoAcesso Situacao(Convite? convitePendente, DateTimeOffset agora) =>
+        !Ativo ? SituacaoAcesso.Desativado
+        : SenhaHash is not null ? SituacaoAcesso.Ativo
+        : convitePendente is not null && convitePendente.ExpiraEm > agora ? SituacaoAcesso.ConvitePendente
+        : SituacaoAcesso.ConviteExpirado;
+
+    /// <summary>
+    /// Apaga os dados pessoais e mantém o registro, que as APRs assinadas citam como autor. Irreversível.
+    /// O e-mail vira um endereço inválido e único, para não colidir com ninguém.
+    /// </summary>
+    public void Anonimizar(DateTimeOffset agora)
+    {
+        if (Ativo)
+            throw new InvalidOperationException("Desative o colaborador antes de anonimizar.");
+
+        Nome = "Colaborador anonimizado";
+        Email = EmailNormalizado = $"anonimizado-{Id:N}@anonimizado.invalid";
+        SenhaHash = null;
+        AnonimizadoEm = agora;
+    }
+}
+
+/// <summary>Em que pé está o acesso de um colaborador, do ponto de vista de quem o administra.</summary>
+public enum SituacaoAcesso
+{
+    /// <summary>Já definiu a senha.</summary>
+    Ativo,
+
+    /// <summary>Tem um link válido e ainda não usado.</summary>
+    ConvitePendente,
+
+    /// <summary>Não definiu a senha e não tem link válido: é preciso reenviar o convite.</summary>
+    ConviteExpirado,
+
+    Desativado,
 }
 
 /// <summary>Link de convite ou de redefinição de senha. Só o hash do token fica no banco.</summary>
