@@ -51,6 +51,9 @@ public class Usuario : EntidadeDoTenant
 /// <summary>Link de convite ou de redefinição de senha. Só o hash do token fica no banco.</summary>
 public class Convite : EntidadeDoTenant
 {
+    /// <summary>Prazo do link. Curto o bastante para limitar o risco, longo o bastante para cobrir um fim de semana.</summary>
+    public static readonly TimeSpan Validade = TimeSpan.FromHours(72);
+
     public Guid UsuarioId { get; set; }
     public TipoConvite Tipo { get; set; }
 

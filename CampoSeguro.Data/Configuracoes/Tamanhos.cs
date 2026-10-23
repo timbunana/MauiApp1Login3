@@ -1,6 +1,7 @@
 namespace CampoSeguro.Data.Configuracoes;
 
-internal static class Tamanhos
+/// <summary>Limites das colunas de texto. Públicos para que as APIs validem com os mesmos números.</summary>
+public static class Tamanhos
 {
     public const int Nome = 200;
 

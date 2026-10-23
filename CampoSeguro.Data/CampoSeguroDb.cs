@@ -9,14 +9,18 @@ public static class CampoSeguroDb
     public const string VariavelConexao = "CAMPOSEGURO_DB";
 
     /// <summary>Configuração única do provedor; todo backend e o Migrator passam por aqui.</summary>
-    public static DbContextOptionsBuilder<CampoSeguroDbContext> Configurar(
-        this DbContextOptionsBuilder<CampoSeguroDbContext> opcoes, string conexao) =>
+    /// <remarks>Não genérico porque o <c>AddDbContext</c> dos backends entrega o builder sem o tipo.</remarks>
+    public static DbContextOptionsBuilder Configurar(this DbContextOptionsBuilder opcoes, string conexao) =>
         opcoes
             .UseNpgsql(conexao, npgsql => npgsql.MigrationsHistoryTable("ef_historico_migracoes"))
             .UseSnakeCaseNamingConvention();
 
-    public static CampoSeguroDbContext Criar(string conexao, IContextoTenant contexto) =>
-        new(new DbContextOptionsBuilder<CampoSeguroDbContext>().Configurar(conexao).Options, contexto);
+    public static CampoSeguroDbContext Criar(string conexao, IContextoTenant contexto)
+    {
+        var opcoes = new DbContextOptionsBuilder<CampoSeguroDbContext>();
+        opcoes.Configurar(conexao);
+        return new(opcoes.Options, contexto);
+    }
 }
 
 /// <summary>

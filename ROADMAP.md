@@ -4,7 +4,7 @@ Estado de desenvolvimento do projeto. O **produto alvo** está descrito no `ARQU
 
 > **Mantenha este arquivo atualizado ao fim de cada sessão de trabalho:** status das etapas, data, commit e o que entrou ou saiu das listas abaixo. Ver "Histórico" no fim.
 
-**Última atualização:** 2026-10-15
+**Última atualização:** 2026-10-23
 
 Legenda: ✅ concluído · 🔄 em andamento · ⬜ não iniciado · ⛔ bloqueado
 
@@ -15,7 +15,7 @@ Ordem de dependência definida no `ARQUITETURA.md` §9. As etapas 1 a 4 são pr�
 | # | Etapa | Status | Referência |
 |---|---|---|---|
 | 1 | `Domain` + `Data` + `Migrator`: banco, multi-tenancy, migrations | ✅ 2026-10-15 | `1562ce0`, `BANCO.md` |
-| 2 | `Platform.Api` mínima: criar tenant e primeiro gestor | ⬜ | |
+| 2 | `Platform.Api` mínima: criar tenant e primeiro gestor | ✅ 2026-10-23 | —, `CLAUDE.md` § Plataforma |
 | 3 | `Manager.Api` + `Manager.Web`: colaboradores, convites, catálogos | ⬜ | |
 | 4 | `Field.Api`: autenticação, download de catálogo, recebimento de APR idempotente | ⬜ | |
 | 5 | Adaptar o app MAUI: SQLite, fila de sincronização, catálogo remoto, compressão de foto | ⬜ | |
@@ -24,14 +24,10 @@ Ordem de dependência definida no `ARQUITETURA.md` §9. As etapas 1 a 4 são pr�
 
 ### Escopo das etapas em aberto
 
-**2. `Platform.Api`**
-- Autenticação dos administradores da plataforma. Ainda não há fluxo para criar o primeiro deles; precisa de comando no Migrator ou de uma ferramenta de linha de comando.
-- Endpoints para criar o tenant e convidar o primeiro gestor.
-- Único backend que usa `IgnoreQueryFilters`.
-
 **3. `Manager.Api` + `Manager.Web`**
 - Colaboradores: cadastrar, desativar, anonimizar (LGPD).
 - Convites: gerar, reenviar (revogando o anterior), exibir o link para o gestor copiar e enviar por e-mail.
+- **Página e endpoint de aceite do convite** (definir a senha). O link que a Plataforma já emite aponta para ela e leva o token no fragmento (`#`): a página lê o fragmento e envia o token por POST. Até existir, os gestores convidados não conseguem entrar.
 - Catálogos: editar o rascunho, publicar e abrir a próxima versão.
 
 **4. `Field.Api`**
@@ -67,8 +63,9 @@ Não depende das etapas acima.
 |---|---|---|
 | Onde o servidor vai ficar | TI | Infra, backup, etapa 4 em produção |
 | Tecnologia do `Manager.Web` (Blazor, React…) | Equipe | Etapa 3 |
-| Algoritmo de hash de senha (`PasswordHasher` do Identity ou Argon2) | Equipe | Etapas 2 a 4 |
+| Algoritmo de hash de senha: adotado o PBKDF2 do `PasswordHasher` do Identity na etapa 2; confirmar ou trocar por Argon2 | Equipe | Nada: o formato é versionado e a troca regrava o hash no login |
 | Indicadores do dashboard | Produto | Etapa 6 |
+| Suportar CNPJ alfanumérico (Receita, desde jul/2026) | Produto | Cadastro de empresas novas com esse formato |
 | Assinaturas e cobrança | Produto | Etapa 7 |
 
 As decisões já tomadas ficam no `ARQUITETURA.md` §11.
@@ -87,10 +84,16 @@ As decisões já tomadas ficam no `ARQUITETURA.md` §11.
 **Camada de dados** (detalhes no `BANCO.md`)
 - O banco não impede incluir `apr_item` numa APR já recebida; a API precisa garantir.
 - O banco não confere se o item de uma versão pertence ao mesmo catálogo.
+- CNPJ só numérico no CHECK e na validação; o alfanumérico é recusado.
+
+**Platform.Api** (detalhes no `CLAUDE.md`)
+- Limite de tentativas de login por IP: atrás do Nginx vira global até configurar `ForwardedHeaders`.
+- Os testes de ponta a ponta (35 casos) rodaram por script fora do repositório.
 
 ## Histórico
 
 | Data | O que mudou | Commit |
 |---|---|---|
 | 2026-10-15 | Etapa 1 concluída: modelo de dados, filtro de tenant, migrations `Inicial` e `Imutabilidade`, `BANCO.md` | `1562ce0` |
-| 2026-10-15 | Criado este roadmap | — |
+| 2026-10-15 | Criado este roadmap | `00aff5a` |
+| 2026-10-23 | Etapa 2 concluída: `Platform.Api` (login JWT, empresas, convite e reenvio de gestor), `Data/Seguranca`, `--criar-admin` no Migrator | — |

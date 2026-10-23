@@ -44,7 +44,9 @@ Toda tabela de negócio tem `tenant_id`. O isolamento é garantido em três cama
 2. **Gravação conferida.** No `SaveChanges`, um registro novo herda o tenant do contexto. Um registro com outro tenant é recusado, e o `tenant_id` de um registro existente não pode ser alterado.
 3. **Chaves estrangeiras compostas.** Toda relação entre tabelas de negócio é `(tenant_id, x_id) → (tenant_id, id)`. Assim o próprio banco impede, por exemplo, uma APR da empresa B que aponte para o catálogo da empresa A, mesmo que o celular envie um GUID forjado.
 
-`IgnoreQueryFilters()` só pode aparecer em dois lugares: na **Plataforma**, que enxerga todos os tenants, e na **busca de login** (por e-mail ou pelo hash do token), que acontece antes de se saber o tenant. Em qualquer outro lugar, é bug.
+`IgnoreQueryFilters()` só pode aparecer em dois lugares: na **Plataforma**, que enxerga todos os tenants, e na **busca de login** (por e-mail ou pelo hash do token), que acontece antes de se saber o tenant. Em qualquer outro lugar, é bug. Na Plataforma ele está concentrado em `CampoSeguro.Platform.Api/TodosOsTenants.cs`.
+
+Senhas e tokens nunca são gravados em claro: o hash é sempre gerado por `CampoSeguro.Data/Seguranca` (`Senhas` para `senha_hash`, `Tokens` para `token_hash`).
 
 ## Tabelas
 
@@ -113,6 +115,9 @@ dotnet ef migrations script -p CampoSeguro.Data -o migracao.sql
 $env:CAMPOSEGURO_DB = "Host=localhost;Database=camposeguro;Username=...;Password=..."
 dotnet run --project CampoSeguro.Migrator -- --listar   # só mostra as pendentes
 dotnet run --project CampoSeguro.Migrator
+
+# Primeiro administrador da Plataforma (pede a senha sem eco; em script, use CAMPOSEGURO_SENHA_ADMIN)
+dotnet run --project CampoSeguro.Migrator -- --criar-admin "Nome Completo" email@camposeguro.com.br
 ```
 
 A tabela de controle é `ef_historico_migracoes`.
@@ -121,4 +126,5 @@ A tabela de controle é `ef_historico_migracoes`.
 
 - **Itens da APR depois da assinatura:** o banco não impede incluir um `apr_item` numa APR já recebida. A API deve gravar a APR e todos os itens numa única transação e recusar inclusões posteriores.
 - **Consistência entre versão e catálogo:** o banco não confere se o `catalogo_item` de uma versão pertence ao mesmo `catalogo`; a API do Painel garante isso.
+- **CNPJ alfanumérico:** `ck_tenant_documento` aceita só 14 dígitos, e `Cnpj.Valido` também. O CNPJ alfanumérico da Receita Federal, emitido para novas inscrições desde julho de 2026, seria recusado. Suportá-lo exige uma migration no CHECK e o novo cálculo do dígito verificador.
 - **Unicidade de e-mail:** com e-mail único entre ativos, um técnico não pode estar ativo em duas empresas ao mesmo tempo. A decisão foi tomada em 2026-10-15 e mudá-la exige separar pessoa e vínculo.

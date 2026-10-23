@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > O produto se chama **CampoSeguro** (`br.com.camposeguro.app`). O repositório e a pasta raiz ainda usam o nome antigo `MauiApp1Login3` — renomear o remoto é decisão do dono do repositório. O projeto, o namespace e o `ApplicationId` já estão renomeados.
 >
-> **`ARQUITETURA.md` descreve o produto alvo**: três aplicações (plataforma, painel da empresa, app do colaborador) sobre um banco PostgreSQL compartilhado, com multi-tenancy e sincronização offline. Hoje existem o app (ainda com autenticação falsa e catálogo fixo no código) e a camada de dados — `CampoSeguro.Domain`, `CampoSeguro.Data` e `CampoSeguro.Migrator`, documentados em **`BANCO.md`**. Leia a arquitetura antes de evoluir o app, porque o catálogo vai passar a vir do servidor.
+> **`ARQUITETURA.md` descreve o produto alvo**: três aplicações (plataforma, painel da empresa, app do colaborador) sobre um banco PostgreSQL compartilhado, com multi-tenancy e sincronização offline. Hoje existem o app (ainda com autenticação falsa e catálogo fixo no código), a camada de dados — `CampoSeguro.Domain`, `CampoSeguro.Data` e `CampoSeguro.Migrator`, documentados em **`BANCO.md`** — e a `CampoSeguro.Platform.Api` (ver "Plataforma" abaixo). Leia a arquitetura antes de evoluir o app, porque o catálogo vai passar a vir do servidor.
 
 App .NET MAUI para registro de **APR (Análise Preliminar de Risco)** em campo — checklist de EPIs/condições de segurança, captura de foto como evidência e geração de um PDF do registro. Escopo atual coberto: Telecomunicações (trabalho em altura e no mesmo nível).
 
@@ -19,6 +19,8 @@ UI, identificadores e comentários são em **pt-BR** — mantenha essa convenç�
 ## Build e execução
 
 Não há projeto de testes, lint ou CI neste repositório. Toda a verificação hoje é build + execução manual.
+
+**Para testar contra um banco descartável**, use os binários do PostgreSQL 18 instalado (`C:\Program Files\PostgreSQL\18\bin`): `initdb -D <scratch>\pgdata -U postgres -A trust` e `pg_ctl ... -o "-p 45432 -c listen_addresses=localhost" start`. Antes de escolher a porta, confira `netsh interface ipv4 show excludedportrange protocol=tcp`: o Windows reserva faixas que mudam a cada boot e o bind falha com "Permission denied" (a 55432 já caiu numa delas). O `pg_ctl start` não devolve o console; rode em segundo plano.
 
 **O SDK está instalado em escopo de usuário** (sem admin) em `%LOCALAPPDATA%\Microsoft\dotnet` e **não está no PATH**. Só a workload `maui-windows` está instalada — builds de Android/iOS ainda exigem `dotnet workload install maui` (+ Android SDK/JDK).
 
@@ -74,6 +76,28 @@ Regras que não são óbvias pelo código:
 - **A migration `Imutabilidade` é escrita à mão** (triggers). Ao regerar a `Inicial`, copie esse arquivo antes e restaure depois.
 - **Nenhum backend aplica migration na inicialização.** Só o Migrator.
 - Os pacotes do EF estão alinhados em 10.0.13 com uma referência explícita ao `Relational`; sem ela, o Npgsql traz o 10.0.4 para quem referencia `Data` e o build quebra com `CS1705`.
+- **Senhas e tokens passam por `Data/Seguranca`**: `Senhas` (PBKDF2 do `PasswordHasher` do Identity, formato versionado) e `Tokens` (256 bits aleatórios; o banco guarda só o SHA-256). Não gere hash nem token em outro lugar. Normalização e validação de e-mail e CNPJ ficam em `Domain/Documentos.cs`.
+- O primeiro administrador da Plataforma é criado por `CampoSeguro.Migrator --criar-admin "Nome" email` (senha lida do terminal sem eco ou de `CAMPOSEGURO_SENHA_ADMIN`, nunca de argumento).
+
+## Plataforma (`CampoSeguro.Platform.Api`)
+
+ASP.NET Core com minimal APIs, `net10.0`. Cadastra empresas (tenants) e convida gestores; é o único backend que enxerga todos os tenants.
+
+```powershell
+$env:CAMPOSEGURO_DB = "Host=localhost;Database=camposeguro;Username=...;Password=..."
+$env:Jwt__Chave = "<pelo menos 32 bytes aleatórios>"
+$env:Convites__UrlAceite = "https://gestao.camposeguro.com.br/convite"
+dotnet run --project CampoSeguro.Platform.Api   # sobe em http://localhost:5080; OpenAPI em /openapi/v1.json (só Development)
+```
+
+Sem qualquer uma das três variáveis a API recusa subir. Rotas: `POST /autenticacao/login`; `GET /empresas`, `GET /empresas/{id}`, `POST /empresas` (empresa + primeiro gestor + convite numa transação), `POST /empresas/{id}/gestores`, `POST /empresas/{id}/gestores/{gestorId}/convite` (reenvio: revoga o pendente e emite outro).
+
+Regras que não são óbvias pelo código:
+- **`IgnoreQueryFilters` só existe em `TodosOsTenants.cs`.** O contexto da Plataforma não tem tenant, então qualquer consulta a entidade de tenant fora de `db.DeTodosOsTenants<T>()` devolve vazio. Nunca copie esse arquivo para outro backend.
+- **Toda rota exige autenticação por padrão** (política de fallback); só o login tem `AllowAnonymous`. A cada requisição o token é conferido contra `administrador_plataforma.ativo`, então desativar um administrador corta o acesso na hora.
+- **O link do convite leva o token no fragmento** (`.../convite#<token>`), para não aparecer em log de acesso nem no `Referer`. A página de aceite (etapa 3) precisa ler o fragmento e enviar o token por POST.
+- Sem serviço de e-mail, o link volta na resposta para o administrador repassar; é o caminho oficial (ARQUITETURA §5), não um contorno.
+- O login tem limite de 10 tentativas por minuto por IP. Atrás do Nginx, configure `ForwardedHeaders`, senão o limite vira global.
 
 ## Limitações conhecidas
 
