@@ -4,6 +4,7 @@
     <ProjectReference Include="..\CampoSeguro.Data\CampoSeguro.Data.csproj" />
     <ProjectReference Include="..\CampoSeguro.Platform.Api\CampoSeguro.Platform.Api.csproj" />
     <ProjectReference Include="..\CampoSeguro.Manager.Api\CampoSeguro.Manager.Api.csproj" />
+    <ProjectReference Include="..\CampoSeguro.Field.Api\CampoSeguro.Field.Api.csproj" />
   </ItemGroup>
 
   <ItemGroup>

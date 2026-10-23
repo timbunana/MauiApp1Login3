@@ -112,6 +112,12 @@ public class Convite : EntidadeDoTenant
 /// </summary>
 public class SessaoDispositivo : EntidadeDoTenant
 {
+    /// <summary>
+    /// Renovada a cada uso: um técnico que sincroniza ao menos uma vez a cada 90 dias nunca precisa
+    /// digitar a senha de novo. Desativar o colaborador ou redefinir a senha revoga antes disso.
+    /// </summary>
+    public static readonly TimeSpan Validade = TimeSpan.FromDays(90);
+
     public Guid UsuarioId { get; set; }
 
     /// <summary>SHA-256 do refresh token (32 bytes).</summary>

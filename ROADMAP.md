@@ -17,7 +17,7 @@ Ordem de dependência definida no `ARQUITETURA.md` §9. As etapas 1 a 4 são pr�
 | 1 | `Domain` + `Data` + `Migrator`: banco, multi-tenancy, migrations | ✅ 2026-10-15 | `1562ce0`, `BANCO.md` |
 | 2 | `Platform.Api` mínima: criar tenant e primeiro gestor | ✅ 2026-10-23 | `fa68ea2`, `CLAUDE.md` § Plataforma |
 | 3 | `Manager.Api` + `Manager.Web`: colaboradores, convites, catálogos | 🔄 desde 2026-10-23 | `CLAUDE.md` § Painel |
-| 4 | `Field.Api`: autenticação, download de catálogo, recebimento de APR idempotente | ⬜ | |
+| 4 | `Field.Api`: autenticação, download de catálogo, recebimento de APR idempotente | ✅ 2026-10-23 | —, `CLAUDE.md` § App de campo |
 | 5 | Adaptar o app MAUI: SQLite, fila de sincronização, catálogo remoto, compressão de foto | ⬜ | |
 | 6 | Indicadores no Painel | ⛔ | indicadores não definidos |
 | 7 | Assinaturas na Plataforma | ⛔ | levantamento adiado |
@@ -34,24 +34,21 @@ Feito na API:
 
 Falta:
 - Troca de senha pelo próprio usuário logado.
-- Consulta das APRs recebidas (lista, detalhe, PDF e fotos). Depende da etapa 4, que é quem recebe as APRs.
+- Consulta das APRs recebidas: lista por período e técnico, detalhe, PDF e fotos servidos por endpoint autorizado (lendo de `Data/Arquivos/Armazenamento`). Desbloqueada: a etapa 4 já recebe e grava as APRs.
+- Sessões dos aparelhos de cada técnico: listar e revogar (aparelho perdido).
 - **`Manager.Web`**, incluindo a página de aceite do convite: lê o token do fragmento (`#`) do link e chama `POST /convites/consultar` e `/convites/aceitar`. Até existir, aceitar um convite exige chamar a API diretamente.
 
 **Fora de qualquer etapa: `Platform.Web`.** O frontend da Administração não está no plano; hoje a Plataforma só é operável pela API. Sugestão: fazer junto com o `Manager.Web`, na mesma tecnologia.
 
-**4. `Field.Api`**
-- Login com `sessao_dispositivo` e refresh token.
-- Download da versão publicada do catálogo.
-- Recebimento da APR idempotente, com APR e itens numa única transação.
-- Upload de fotos e PDF, servidos só por endpoint autorizado.
-
-**5. App MAUI**
-- SQLite local com o rascunho da APR; GUID gerado no aparelho.
+**5. App MAUI** (o contrato com a `Field.Api` já está pronto e testado)
+- Referenciar `CampoSeguro.Domain` para usar o `ConteudoApr` ao assinar: o servidor recusa APR cujo hash não confira.
+- SQLite local com o rascunho da APR; GUID gerado no aparelho (APR e cada foto).
+- Login real no lugar da lista fixa; token de renovação no `SecureStorage`.
+- Exigir todos os itens respondidos antes de assinar (o servidor já recusa APR incompleta).
 - Fila de sincronização com repetição automática.
 - Catálogo remoto no lugar do `CatalogoEpis` fixo; "Altura" e "Mesmo Nível" viram dois catálogos.
 - Resposta com três estados no lugar do checkbox.
 - Compressão de foto (~1280px, JPEG médio), GPS e descrição do local.
-- Login real no lugar da lista fixa.
 
 ## Trabalho em paralelo
 
@@ -60,7 +57,7 @@ Não depende das etapas acima.
 | Item | Status | Observação |
 |---|---|---|
 | Validar o app no Android (câmera, permissões, `Share`) | ⬜ | Maior risco do que já existe; exige workload `maui`, Android SDK e JDK |
-| Projeto de testes automatizados | ✅ 2026-10-23 | `CampoSeguro.Testes`, 103 casos (domínio, banco, Plataforma e Painel); precisa de um PostgreSQL em `CAMPOSEGURO_TESTE_DB` |
+| Projeto de testes automatizados | ✅ 2026-10-23 | `CampoSeguro.Testes`, 122 casos (domínio, banco, as três APIs e o fluxo de ponta a ponta); precisa de um PostgreSQL em `CAMPOSEGURO_TESTE_DB` |
 | Separar em repositórios: núcleo (`Domain`, `Data`, `Migrator`), Administração, Gestão e App | ⬜ | Depende de como o núcleo será distribuído; os testes se dividem junto, e o fluxo Plataforma → Painel vira teste do núcleo ou de ponta a ponta |
 | CI rodando os testes | ⬜ | Precisa de um PostgreSQL no runner |
 | Infra: Docker Compose, Nginx, HTTPS | ⛔ | Depende de onde o servidor vai ficar |
@@ -94,7 +91,7 @@ As decisões já tomadas ficam no `ARQUITETURA.md` §11.
 - Barra de título clara no Windows.
 
 **Camada de dados** (detalhes no `BANCO.md`)
-- O banco não impede incluir `apr_item` numa APR já recebida; a API precisa garantir.
+- O banco não impede incluir `apr_item` numa APR já recebida; hoje a `Field.Api` garante (não há rota para isso).
 - O banco não confere se o item de uma versão pertence ao mesmo catálogo; hoje a edição do rascunho no Painel garante.
 - CNPJ só numérico no CHECK e na validação; o alfanumérico é recusado.
 
@@ -110,4 +107,5 @@ As decisões já tomadas ficam no `ARQUITETURA.md` §11.
 | 2026-10-23 | Etapa 2 concluída: `Platform.Api` (login JWT, empresas, convite e reenvio de gestor), `Data/Seguranca`, `--criar-admin` no Migrator | `fa68ea2` |
 | 2026-10-23 | Projeto `CampoSeguro.Testes` (79 casos). Etapa 3 iniciada: `Manager.Api` com login do gestor, `/eu` e aceite de convite | `2c49e35` |
 | 2026-10-23 | Colaboradores no Painel (cadastro, links, desativar, reativar, anonimizar); redefinição de senha do gestor pela Plataforma; decisão de repositórios separados registrada | `c30eff2` |
-| 2026-10-23 | Catálogos no Painel: ciclo rascunho → publicação → próxima versão e modelos de Telecom | — |
+| 2026-10-23 | Catálogos no Painel: ciclo rascunho → publicação → próxima versão e modelos de Telecom | `da3a723` |
+| 2026-10-23 | Etapa 4 concluída: `Field.Api` (sessão por aparelho, catálogo publicado, APR idempotente com hash conferido, fotos e PDF); `ConteudoApr` e `Armazenamento` no núcleo | — |

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > O produto se chama **CampoSeguro** (`br.com.camposeguro.app`). O repositório e a pasta raiz ainda usam o nome antigo `MauiApp1Login3` — renomear o remoto é decisão do dono do repositório. O projeto, o namespace e o `ApplicationId` já estão renomeados.
 >
-> **`ARQUITETURA.md` descreve o produto alvo**: três aplicações (plataforma, painel da empresa, app do colaborador) sobre um banco PostgreSQL compartilhado, com multi-tenancy e sincronização offline. Hoje existem o app (ainda com autenticação falsa e catálogo fixo no código), a camada de dados — `CampoSeguro.Domain`, `CampoSeguro.Data` e `CampoSeguro.Migrator`, documentados em **`BANCO.md`** — a `CampoSeguro.Platform.Api` (ver "Plataforma" abaixo) e o começo da `CampoSeguro.Manager.Api` (ver "Painel" abaixo). Os frontends web ainda não existem. Leia a arquitetura antes de evoluir o app, porque o catálogo vai passar a vir do servidor.
+> **`ARQUITETURA.md` descreve o produto alvo**: três aplicações (plataforma, painel da empresa, app do colaborador) sobre um banco PostgreSQL compartilhado, com multi-tenancy e sincronização offline. Hoje existem o app (ainda com autenticação falsa e catálogo fixo no código), a camada de dados — `CampoSeguro.Domain`, `CampoSeguro.Data` e `CampoSeguro.Migrator`, documentados em **`BANCO.md`** — e os três backends: `CampoSeguro.Platform.Api`, `CampoSeguro.Manager.Api` e `CampoSeguro.Field.Api` (ver as seções abaixo). Os frontends web ainda não existem, e o app ainda não fala com a `Field.Api` (etapa 5). Leia a arquitetura antes de evoluir o app, porque o catálogo vai passar a vir do servidor.
 
 App .NET MAUI para registro de **APR (Análise Preliminar de Risco)** em campo — checklist de EPIs/condições de segurança, captura de foto como evidência e geração de um PDF do registro. Escopo atual coberto: Telecomunicações (trabalho em altura e no mesmo nível).
 
@@ -22,7 +22,7 @@ Não há lint nem CI. O app MAUI é verificado por build e execução manual; o 
 
 ### Testes (`CampoSeguro.Testes`)
 
-xUnit v3 com o Microsoft.Testing.Platform (o `global.json` da raiz faz o opt-in que o `dotnet test` do .NET 10 exige). Cobre domínio, as regras do banco (CHECKs, índices, FKs compostas e os triggers, em SQL puro), o filtro de tenant do EF e as duas APIs inteiras em memória (`WebApplicationFactory`), inclusive o fluxo Plataforma → convite → Painel.
+xUnit v3 com o Microsoft.Testing.Platform (o `global.json` da raiz faz o opt-in que o `dotnet test` do .NET 10 exige). Cobre domínio, as regras do banco (CHECKs, índices, FKs compostas e os triggers, em SQL puro), o filtro de tenant do EF e as três APIs inteiras em memória (`WebApplicationFactory`), inclusive o fluxo completo em `Fluxo/PontaAPontaTestes` (empresa nova → gestora → catálogo publicado → técnico → APR com foto e PDF no servidor).
 
 ```powershell
 $env:CAMPOSEGURO_TESTE_DB = "Host=localhost;Port=45432;Username=postgres"   # servidor, sem Database
@@ -32,7 +32,8 @@ dotnet test --project CampoSeguro.Testes
 - Cada execução cria um banco `camposeguro_teste_*`, aplica as migrations reais e o apaga no fim. **Nunca aponte `CAMPOSEGURO_TESTE_DB` para produção.**
 - Sem a variável, os testes de banco e de API são **pulados** (não falham) e só os de domínio rodam.
 - Os testes não limpam dados entre si: cada um cria as próprias empresas com CNPJ e e-mail aleatórios (`Infra/Gerar`, `Infra/Pessoas`, `Infra/Cenario`). Mantenha assim; não conte linhas de tabela inteira.
-- As fábricas usam `WebApplicationFactory<OpcoesJwt>` de cada API, não `Program`: as duas APIs têm um `Program` global e o nome seria ambíguo.
+- As fábricas usam `WebApplicationFactory<OpcoesJwt>` de cada API, não `Program`: as APIs têm um `Program` global cada e o nome seria ambíguo. A fábrica do app de campo usa uma pasta de arquivos temporária própria, apagada no fim.
+- APRs de teste são montadas por `Campo/AprDeTeste`, que calcula o hash com `ConteudoApr` como o app fará.
 
 **Para ter um servidor descartável**, use os binários do PostgreSQL 18 instalado (`C:\Program Files\PostgreSQL\18\bin`): `initdb -D <scratch>\pgdata -U postgres -A trust` e `pg_ctl ... -o "-p 45432 -c listen_addresses=localhost" start`. Antes de escolher a porta, confira `netsh interface ipv4 show excludedportrange protocol=tcp`: o Windows reserva faixas que mudam a cada boot e o bind falha com "Permission denied" (a 55432 já caiu numa delas). O `pg_ctl start` não devolve o console; rode em segundo plano.
 
@@ -133,6 +134,21 @@ Regras que não são óbvias pelo código:
 - **Catálogo:** criar abre o rascunho da versão 1; `PUT /rascunho` substitui a lista inteira, na ordem enviada; publicar congela; `POST /rascunho` abre a N+1 copiando a última publicada. Item com `itemId` mantém a identidade (é o que agrupa o indicador de não conformidade mesmo após corrigir o texto); sem `itemId` é item novo. **A API confere que o `itemId` é do mesmo catálogo**, o que o banco não faz. Itens antigos são apagados e os novos incluídos em gravações separadas, por causa dos índices únicos de ordem e item.
 - **Modelos** (`Catalogos/Modelos.cs`) usam os mesmos textos do `CatalogoEpis` do app e são importados como **rascunho**: quem publica é a empresa, depois de revisar. Se mudar um texto lá, mude aqui também até a etapa 5 aposentar a lista fixa.
 - Emissão de link (`LinksDeAcesso` em `Data/Seguranca`) e situação do acesso (`Usuario.Situacao`) são compartilhadas com a Plataforma: mude lá, não em cada API.
+
+## App de campo (`CampoSeguro.Field.Api`)
+
+Backend do app MAUI, porta 5100. Exige `CAMPOSEGURO_DB`, `Jwt__Chave` (própria) e `Armazenamento__Raiz` (pasta das fotos e PDFs; precisa de backup como o banco). Rotas:
+- `POST /autenticacao/login` (só técnico; gestor com a senha certa recebe 403), `POST /autenticacao/renovar`, `POST /autenticacao/sair`.
+- `GET /catalogos`: última versão publicada de cada catálogo ativo, com os itens.
+- `PUT /aprs/{id}` (recebe a APR), `GET /aprs/{id}` (o que falta subir), `PUT /aprs/{id}/evidencias/{evidenciaId}` (`image/jpeg`) e `PUT /aprs/{id}/pdf` (`application/pdf`).
+
+Regras que não são óbvias pelo código:
+- **Sessão por aparelho** (`sessao_dispositivo`): token de acesso de 1h com claim `sid`, conferido contra o banco a cada requisição; token de renovação de 90 dias, estendido a cada uso e **não rotacionado** de propósito (resposta perdida em rede ruim não pode deslogar o técnico em campo). Revogação: sair, desativar o colaborador, redefinir a senha.
+- **Tudo é idempotente pelo id gerado no celular.** Mesma APR de novo → 200 com o que falta subir; mesmo id com outro conteúdo → 409; id que já existe em outra empresa → 409 sem dizer de quem. Foto e PDF reenviados iguais → 200.
+- **O servidor recalcula o hash** com `Domain/ConteudoApr` e recusa (422) se não bater com `conteudoHash`. O app precisa usar esse mesmo código; mudar o formato canônico é mudança de contrato (`VersaoFormato`).
+- **A APR precisa responder todos os itens da versão**, com o mesmo texto e ordem (422 se não). O autor e o `autor_nome` vêm do token e do banco, nunca do corpo.
+- Foto só é aceita se o SHA-256 e o tamanho baterem com o registrado na APR e o arquivo começar como JPEG. Os arquivos ficam em `Data/Arquivos/Armazenamento`, sob `{tenant}/aprs/{apr}/`, e passam por `.recebendo/` antes de ir ao destino.
+- O limite de login é de 30 por minuto por IP: técnicos na mesma operadora podem sair pelo mesmo IP (CGNAT).
 
 ## Limitações conhecidas
 

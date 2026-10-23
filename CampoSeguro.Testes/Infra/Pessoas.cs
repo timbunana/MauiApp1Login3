@@ -38,6 +38,32 @@ public static class Pessoas
         return usuario;
     }
 
+    public sealed record ItemPublicado(Guid ItemId, int Ordem, string Texto);
+
+    /// <summary>Catálogo com a versão 1 já publicada, pronta para o app baixar.</summary>
+    public static async Task<(Guid Catalogo, Guid Versao, List<ItemPublicado> Itens)> CatalogoPublicado(
+        BancoDeTeste banco, Guid tenant, params string[] textos)
+    {
+        var catalogo = new Catalogo { TenantId = tenant, Nome = $"Catálogo {Guid.NewGuid():N}" };
+        var versao = new CatalogoVersao { TenantId = tenant, CatalogoId = catalogo.Id, Numero = 1 };
+        var itens = textos.Select((texto, i) => new { Item = new CatalogoItem { TenantId = tenant, CatalogoId = catalogo.Id }, Ordem = i + 1, Texto = texto }).ToList();
+
+        await using (var db = banco.Contexto(null))
+        {
+            db.Catalogos.Add(catalogo);
+            db.CatalogoVersoes.Add(versao);
+            foreach (var i in itens)
+            {
+                db.CatalogoItens.Add(i.Item);
+                db.CatalogoVersaoItens.Add(new CatalogoVersaoItem { TenantId = tenant, CatalogoVersaoId = versao.Id, CatalogoItemId = i.Item.Id, Ordem = i.Ordem, Texto = i.Texto });
+            }
+            await db.SaveChangesAsync();
+        }
+
+        await banco.Sql($"UPDATE catalogo_versao SET publicada_em = now() WHERE id = '{versao.Id}'");
+        return (catalogo.Id, versao.Id, itens.Select(i => new ItemPublicado(i.Item.Id, i.Ordem, i.Texto)).ToList());
+    }
+
     /// <summary>Devolve o token em claro, como sairia no link.</summary>
     public static async Task<string> NovoConvite(BancoDeTeste banco, Usuario usuario, TipoConvite tipo = TipoConvite.Convite)
     {
