@@ -7,7 +7,8 @@
       "applicationUrl": "http://localhost:5090",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "Convites__UrlAceite": "http://localhost:5180/convite"
+        "Convites__UrlAceite": "http://localhost:5180/convite",
+        "Armazenamento__Raiz": "../CampoSeguro.Field.Api/arquivos-dev"
       }
     }
   }

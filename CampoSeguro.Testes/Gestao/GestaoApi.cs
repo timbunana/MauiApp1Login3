@@ -10,13 +10,26 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace CampoSeguro.Testes.Gestao;
 
-/// <summary>A Manager.Api inteira em memória. A chave JWT é diferente da usada em <see cref="PlataformaApi"/>.</summary>
-public sealed class GestaoApi(BancoDeTeste banco) : WebApplicationFactory<CampoSeguro.Manager.Api.Autenticacao.OpcoesJwt>
+/// <summary>
+/// A Manager.Api inteira em memória. A chave JWT é diferente da usada em <see cref="PlataformaApi"/>.
+/// Para ler o que o app de campo gravou, passe a mesma pasta de arquivos da <c>CampoApi</c>.
+/// </summary>
+public sealed class GestaoApi(BancoDeTeste banco, string? raizArquivos = null) : WebApplicationFactory<CampoSeguro.Manager.Api.Autenticacao.OpcoesJwt>
 {
+    private readonly string raiz = raizArquivos ?? Path.Combine(Path.GetTempPath(), "camposeguro-testes", Guid.NewGuid().ToString("N"));
+
+    public override async ValueTask DisposeAsync()
+    {
+        await base.DisposeAsync();
+        if (raizArquivos is null && Directory.Exists(raiz))
+            Directory.Delete(raiz, recursive: true);
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testes");
         builder.UseSetting(CampoSeguroDb.VariavelConexao, banco.Conexao);
+        builder.UseSetting("Armazenamento:Raiz", raiz);
         builder.UseSetting("Jwt:Chave", "outra-chave-de-teste-so-do-painel-0123456789");
         builder.UseSetting("Convites:UrlAceite", PlataformaApi.UrlAceite);
         builder.UseSetting("Login:TentativasPorMinuto", "1000");

@@ -26,6 +26,44 @@ public static class ColaboradoresEndpoints
         grupo.MapPost("/{id:guid}/desativar", Desativar);
         grupo.MapPost("/{id:guid}/reativar", Reativar);
         grupo.MapPost("/{id:guid}/anonimizar", Anonimizar);
+        grupo.MapGet("/{id:guid}/sessoes", Sessoes);
+        grupo.MapPost("/{id:guid}/sessoes/{sessaoId:guid}/revogar", RevogarSessao);
+    }
+
+    /// <summary>Aparelhos em que o colaborador entrou no app, os mais usados recentemente primeiro.</summary>
+    private static async Task<IResult> Sessoes(Guid id, CampoSeguroDbContext db, CancellationToken ct)
+    {
+        if (!await db.Usuarios.AnyAsync(u => u.Id == id, ct))
+            return NaoEncontrado();
+
+        var agora = DateTimeOffset.UtcNow;
+        var sessoes = await db.SessoesDispositivo.AsNoTracking()
+            .Where(s => s.UsuarioId == id)
+            .OrderByDescending(s => s.UltimoUsoEm ?? s.CriadoEm)
+            .ToListAsync(ct);
+
+        return Results.Ok(sessoes.Select(s =>
+            new SessaoDoAparelho(s.Id, s.Dispositivo, s.CriadoEm, s.UltimoUsoEm, s.ExpiraEm, s.RevogadaEm is null && s.ExpiraEm > agora)));
+    }
+
+    /// <summary>Aparelho perdido ou trocado: corta só aquele aparelho, sem desativar o colaborador.</summary>
+    private static async Task<IResult> RevogarSessao(Guid id, Guid sessaoId, CampoSeguroDbContext db, IContextoTenant contexto,
+        ILoggerFactory logs, CancellationToken ct)
+    {
+        var sessao = await db.SessoesDispositivo.SingleOrDefaultAsync(s => s.Id == sessaoId && s.UsuarioId == id, ct);
+        if (sessao is null)
+            return Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Sessão não encontrada.");
+
+        if (sessao.RevogadaEm is null)
+        {
+            sessao.RevogadaEm = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+
+            logs.CreateLogger(nameof(ColaboradoresEndpoints)).LogInformation(
+                "Gestor {GestorId} revogou a sessão {SessaoId} do colaborador {UsuarioId}", contexto.UsuarioId, sessaoId, id);
+        }
+
+        return Results.NoContent();
     }
 
     /// <summary>Por padrão só os ativos; desativados somem do Painel, mas continuam consultáveis.</summary>

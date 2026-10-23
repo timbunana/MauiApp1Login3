@@ -1,6 +1,7 @@
 using CampoSeguro.Data;
 using CampoSeguro.Data.Seguranca;
 using CampoSeguro.Domain;
+using Microsoft.EntityFrameworkCore;
 
 namespace CampoSeguro.Manager.Api.Autenticacao;
 
@@ -12,11 +13,36 @@ public static class LoginEndpoints
 
     public sealed record RespostaLogin(string Token, DateTimeOffset ExpiraEm);
 
-    public static void MapLogin(this IEndpointRouteBuilder app) =>
+    public sealed record PedidoTrocaSenha(string? SenhaAtual, string? SenhaNova);
+
+    public static void MapLogin(this IEndpointRouteBuilder app)
+    {
         app.MapPost("/autenticacao/login", Entrar)
             .AllowAnonymous()
             .RequireRateLimiting(PoliticaLimite)
             .WithTags("Autenticação");
+
+        app.MapPost("/autenticacao/senha", TrocarSenha)
+            .RequireRateLimiting(PoliticaLimite)
+            .WithTags("Autenticação");
+    }
+
+    /// <summary>
+    /// O gestor logado troca a própria senha. Senha atual errada volta 400 (e não 401), para o
+    /// frontend não confundir com sessão expirada e deslogar.
+    /// </summary>
+    private static async Task<IResult> TrocarSenha(PedidoTrocaSenha pedido, CampoSeguroDbContext db, IContextoTenant contexto, CancellationToken ct)
+    {
+        var usuario = await db.Usuarios.SingleAsync(u => u.Id == contexto.UsuarioId, ct);
+        if (Senhas.Conferir(usuario.SenhaHash, pedido.SenhaAtual ?? "") == ResultadoSenha.Invalida)
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["senhaAtual"] = ["Senha atual incorreta."] }, title: "Dados inválidos.");
+        if (Senhas.Problema(pedido.SenhaNova ?? "") is { } problema)
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["senhaNova"] = [problema] }, title: "Dados inválidos.");
+
+        usuario.SenhaHash = Senhas.Gerar(pedido.SenhaNova!);
+        await db.SaveChangesAsync(ct);
+        return Results.NoContent();
+    }
 
     /// <summary>
     /// E-mail inexistente, usuário desativado, convite ainda não aceito e senha errada dão a mesma

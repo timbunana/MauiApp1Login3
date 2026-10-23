@@ -16,8 +16,8 @@ Ordem de dependência definida no `ARQUITETURA.md` §9. As etapas 1 a 4 são pr�
 |---|---|---|---|
 | 1 | `Domain` + `Data` + `Migrator`: banco, multi-tenancy, migrations | ✅ 2026-10-15 | `1562ce0`, `BANCO.md` |
 | 2 | `Platform.Api` mínima: criar tenant e primeiro gestor | ✅ 2026-10-23 | `fa68ea2`, `CLAUDE.md` § Plataforma |
-| 3 | `Manager.Api` + `Manager.Web`: colaboradores, convites, catálogos | 🔄 desde 2026-10-23 | `CLAUDE.md` § Painel |
-| 4 | `Field.Api`: autenticação, download de catálogo, recebimento de APR idempotente | ✅ 2026-10-23 | —, `CLAUDE.md` § App de campo |
+| 3 | `Manager.Api` + `Manager.Web`: colaboradores, convites, catálogos | 🔄 API pronta; falta o `Manager.Web` | `CLAUDE.md` § Painel |
+| 4 | `Field.Api`: autenticação, download de catálogo, recebimento de APR idempotente | ✅ 2026-10-23 | `a54ca89`, `CLAUDE.md` § App de campo |
 | 5 | Adaptar o app MAUI: SQLite, fila de sincronização, catálogo remoto, compressão de foto | ⬜ | |
 | 6 | Indicadores no Painel | ⛔ | indicadores não definidos |
 | 7 | Assinaturas na Plataforma | ⛔ | levantamento adiado |
@@ -32,10 +32,10 @@ Feito na API:
 - Links: reenviar convite e gerar redefinição de senha de técnico. O gestor que esqueceu a senha recupera pela Plataforma (`/redefinicao-senha`).
 - Catálogos: criar, renomear, desativar; rascunho (editar, descartar, publicar, abrir a próxima versão); modelos "Telecom — Altura" e "Telecom — Mesmo Nível", importados como rascunho.
 
+- Consulta das APRs: lista paginada com filtros, detalhe, PDF e fotos conferidos contra o hash antes de entregar.
+- Sessões dos aparelhos de cada técnico (listar, revogar) e troca de senha pelo próprio usuário, no Painel e no app.
+
 Falta:
-- Troca de senha pelo próprio usuário logado.
-- Consulta das APRs recebidas: lista por período e técnico, detalhe, PDF e fotos servidos por endpoint autorizado (lendo de `Data/Arquivos/Armazenamento`). Desbloqueada: a etapa 4 já recebe e grava as APRs.
-- Sessões dos aparelhos de cada técnico: listar e revogar (aparelho perdido).
 - **`Manager.Web`**, incluindo a página de aceite do convite: lê o token do fragmento (`#`) do link e chama `POST /convites/consultar` e `/convites/aceitar`. Até existir, aceitar um convite exige chamar a API diretamente.
 
 **Fora de qualquer etapa: `Platform.Web`.** O frontend da Administração não está no plano; hoje a Plataforma só é operável pela API. Sugestão: fazer junto com o `Manager.Web`, na mesma tecnologia.
@@ -57,7 +57,7 @@ Não depende das etapas acima.
 | Item | Status | Observação |
 |---|---|---|
 | Validar o app no Android (câmera, permissões, `Share`) | ⬜ | Maior risco do que já existe; exige workload `maui`, Android SDK e JDK |
-| Projeto de testes automatizados | ✅ 2026-10-23 | `CampoSeguro.Testes`, 122 casos (domínio, banco, as três APIs e o fluxo de ponta a ponta); precisa de um PostgreSQL em `CAMPOSEGURO_TESTE_DB` |
+| Projeto de testes automatizados | ✅ 2026-10-23 | `CampoSeguro.Testes`, 133 casos (domínio, banco, as três APIs e o fluxo de ponta a ponta); precisa de um PostgreSQL em `CAMPOSEGURO_TESTE_DB` |
 | Separar em repositórios: núcleo (`Domain`, `Data`, `Migrator`), Administração, Gestão e App | ⬜ | Depende de como o núcleo será distribuído; os testes se dividem junto, e o fluxo Plataforma → Painel vira teste do núcleo ou de ponta a ponta |
 | CI rodando os testes | ⬜ | Precisa de um PostgreSQL no runner |
 | Infra: Docker Compose, Nginx, HTTPS | ⛔ | Depende de onde o servidor vai ficar |
@@ -108,4 +108,5 @@ As decisões já tomadas ficam no `ARQUITETURA.md` §11.
 | 2026-10-23 | Projeto `CampoSeguro.Testes` (79 casos). Etapa 3 iniciada: `Manager.Api` com login do gestor, `/eu` e aceite de convite | `2c49e35` |
 | 2026-10-23 | Colaboradores no Painel (cadastro, links, desativar, reativar, anonimizar); redefinição de senha do gestor pela Plataforma; decisão de repositórios separados registrada | `c30eff2` |
 | 2026-10-23 | Catálogos no Painel: ciclo rascunho → publicação → próxima versão e modelos de Telecom | `da3a723` |
-| 2026-10-23 | Etapa 4 concluída: `Field.Api` (sessão por aparelho, catálogo publicado, APR idempotente com hash conferido, fotos e PDF); `ConteudoApr` e `Armazenamento` no núcleo | — |
+| 2026-10-23 | Etapa 4 concluída: `Field.Api` (sessão por aparelho, catálogo publicado, APR idempotente com hash conferido, fotos e PDF); `ConteudoApr` e `Armazenamento` no núcleo | `a54ca89` |
+| 2026-10-23 | Backend da etapa 3 completo: consulta de APRs no Painel (com conferência de hash dos arquivos), sessões dos aparelhos e troca de senha | — |

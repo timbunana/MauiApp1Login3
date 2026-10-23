@@ -1,7 +1,9 @@
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using CampoSeguro.Data;
+using CampoSeguro.Data.Arquivos;
 using CampoSeguro.Manager.Api;
+using CampoSeguro.Manager.Api.Aprs;
 using CampoSeguro.Manager.Api.Autenticacao;
 using CampoSeguro.Manager.Api.Catalogos;
 using CampoSeguro.Manager.Api.Colaboradores;
@@ -15,6 +17,7 @@ using CampoSeguro.Manager.Api.Perfil;
 //   CAMPOSEGURO_DB   connection string do PostgreSQL
 //   Jwt__Chave            segredo do HS256, pelo menos 32 bytes aleatórios, diferente do da Plataforma
 //   Convites__UrlAceite   página de aceite do Painel (a mesma configurada na Plataforma)
+//   Armazenamento__Raiz   pasta das fotos e PDFs, a mesma da Field.Api
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,6 +31,9 @@ jwt.Validar();
 var convites = builder.Configuration.GetSection("Convites").Get<OpcoesConvite>() ?? new OpcoesConvite();
 convites.Validar();
 builder.Services.AddSingleton(convites);
+
+// A mesma pasta em que a Field.Api grava: em produção, os dois containers montam o mesmo volume.
+builder.Services.AddSingleton(new Armazenamento(builder.Configuration["Armazenamento:Raiz"] ?? ""));
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IContextoTenant, ContextoTenantDaRequisicao>();
@@ -67,5 +73,6 @@ app.MapConvites();
 app.MapPerfil();
 app.MapColaboradores();
 app.MapCatalogos();
+app.MapAprs();
 
 app.Run();

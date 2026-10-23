@@ -13,3 +13,7 @@ public sealed record Colaborador(
 public sealed record ConviteEmitido(string Link, DateTimeOffset ExpiraEm);
 
 public sealed record ColaboradorConvidado(Colaborador Colaborador, ConviteEmitido Convite);
+
+/// <summary>Um aparelho em que o técnico entrou no app.</summary>
+public sealed record SessaoDoAparelho(
+    Guid Id, string? Dispositivo, DateTimeOffset CriadaEm, DateTimeOffset? UltimoUsoEm, DateTimeOffset ExpiraEm, bool Ativa);

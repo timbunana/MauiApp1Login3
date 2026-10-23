@@ -36,6 +36,34 @@ public static class SessoesEndpoints
         grupo.MapPost("/login", Entrar).AllowAnonymous().RequireRateLimiting(PoliticaLimite);
         grupo.MapPost("/renovar", Renovar).AllowAnonymous().RequireRateLimiting(PoliticaLimite);
         grupo.MapPost("/sair", Sair);
+        grupo.MapPost("/senha", TrocarSenha).RequireRateLimiting(PoliticaLimite);
+    }
+
+    public sealed record PedidoTrocaSenha(string? SenhaAtual, string? SenhaNova);
+
+    /// <summary>
+    /// O técnico troca a própria senha pelo app. Os outros aparelhos dele saem (quem trocou a senha por
+    /// desconfiança espera isso); este aparelho continua conectado. Senha atual errada volta 400, não
+    /// 401, para o app não tratar como sessão encerrada.
+    /// </summary>
+    private static async Task<IResult> TrocarSenha(PedidoTrocaSenha pedido, CampoSeguroDbContext db,
+        ContextoTenantDaRequisicao contexto, CancellationToken ct)
+    {
+        var usuario = await db.Usuarios.SingleAsync(u => u.Id == contexto.UsuarioId, ct);
+        if (Senhas.Conferir(usuario.SenhaHash, pedido.SenhaAtual ?? "") == ResultadoSenha.Invalida)
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["senhaAtual"] = ["Senha atual incorreta."] }, title: "Dados inválidos.");
+        if (Senhas.Problema(pedido.SenhaNova ?? "") is { } problema)
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["senhaNova"] = [problema] }, title: "Dados inválidos.");
+
+        await using var transacao = await db.Database.BeginTransactionAsync(ct);
+        usuario.SenhaHash = Senhas.Gerar(pedido.SenhaNova!);
+        await db.SaveChangesAsync(ct);
+        await db.SessoesDispositivo
+            .Where(s => s.UsuarioId == usuario.Id && s.Id != contexto.SessaoId && s.RevogadaEm == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevogadaEm, DateTimeOffset.UtcNow), ct);
+        await transacao.CommitAsync(ct);
+
+        return Results.NoContent();
     }
 
     /// <summary>

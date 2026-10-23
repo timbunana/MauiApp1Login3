@@ -117,8 +117,10 @@ Regras que não são óbvias pelo código:
 
 ## Painel (`CampoSeguro.Manager.Api`)
 
-Backend do gestor da empresa-cliente. Mesma estrutura da Plataforma, porta 5090, e exige `CAMPOSEGURO_DB`, `Jwt__Chave` (**diferente** da chave da Plataforma) e `Convites__UrlAceite` (a mesma da Plataforma). Rotas até agora:
-- `POST /autenticacao/login` (só gestor; técnico com a senha certa recebe 403) e `GET /eu`.
+Backend do gestor da empresa-cliente. Mesma estrutura da Plataforma, porta 5090, e exige `CAMPOSEGURO_DB`, `Jwt__Chave` (**diferente** da chave da Plataforma), `Convites__UrlAceite` (a mesma da Plataforma) e `Armazenamento__Raiz` (**a mesma pasta da `Field.Api`**: em produção, os dois montam o mesmo volume). Rotas:
+- `POST /autenticacao/login` (só gestor; técnico com a senha certa recebe 403), `POST /autenticacao/senha` e `GET /eu`.
+- `/aprs`: `GET` paginado (`de`, `ate`, `tecnicoId`, `catalogoId`, `somenteNaoConformes`, `pagina`, `tamanho`), `GET /{id}`, `GET /{id}/pdf` e `GET /{id}/evidencias/{evidenciaId}`.
+- `/colaboradores/{id}/sessoes` (`GET`) e `/colaboradores/{id}/sessoes/{sessaoId}/revogar` (`POST`): aparelhos do técnico.
 - `POST /convites/consultar` e `POST /convites/aceitar`: abertas, para qualquer colaborador definir a senha pelo link.
 - `/colaboradores`: `GET` (só ativos; `?incluirDesativados=true` para todos), `GET /{id}`, `POST` (cadastra e devolve o link do convite; sem `papel`, é técnico) e as ações `POST /{id}/convite`, `/redefinicao-senha`, `/desativar`, `/reativar`, `/anonimizar`.
 - `/catalogos`: `GET` (`?incluirInativos=true`), `POST`, `GET|PUT /{id}`, `POST /{id}/desativar|reativar`, `GET /{id}/versoes/{numero}`; rascunho em `GET|POST|PUT|DELETE /{id}/rascunho` e `POST /{id}/rascunho/publicar`; modelos em `GET /modelos` e `POST /modelos/{codigo}`.
@@ -133,12 +135,14 @@ Regras que não são óbvias pelo código:
 - Desativar revoga os links pendentes e as sessões dos aparelhos na mesma gravação. Anonimizar (`Usuario.Anonimizar`) exige estar desativado, é irreversível e não toca no `apr.autor_nome`.
 - **Catálogo:** criar abre o rascunho da versão 1; `PUT /rascunho` substitui a lista inteira, na ordem enviada; publicar congela; `POST /rascunho` abre a N+1 copiando a última publicada. Item com `itemId` mantém a identidade (é o que agrupa o indicador de não conformidade mesmo após corrigir o texto); sem `itemId` é item novo. **A API confere que o `itemId` é do mesmo catálogo**, o que o banco não faz. Itens antigos são apagados e os novos incluídos em gravações separadas, por causa dos índices únicos de ordem e item.
 - **Modelos** (`Catalogos/Modelos.cs`) usam os mesmos textos do `CatalogoEpis` do app e são importados como **rascunho**: quem publica é a empresa, depois de revisar. Se mudar um texto lá, mude aqui também até a etapa 5 aposentar a lista fixa.
+- **Fotos e PDF só saem por `/aprs`, conferidos contra o hash do banco** antes de entregar. Arquivo alterado ou sumido do disco vira 500 com log de erro, nunca um documento diferente do assinado. Resposta com `Cache-Control: private, no-store`. Foto pendente é 404; expurgada pela retenção, 410.
+- Troca de senha com a senha atual errada responde **400**, não 401, para o frontend não confundir com sessão expirada. No app de campo, trocar a senha derruba os outros aparelhos do técnico e mantém o atual.
 - Emissão de link (`LinksDeAcesso` em `Data/Seguranca`) e situação do acesso (`Usuario.Situacao`) são compartilhadas com a Plataforma: mude lá, não em cada API.
 
 ## App de campo (`CampoSeguro.Field.Api`)
 
 Backend do app MAUI, porta 5100. Exige `CAMPOSEGURO_DB`, `Jwt__Chave` (própria) e `Armazenamento__Raiz` (pasta das fotos e PDFs; precisa de backup como o banco). Rotas:
-- `POST /autenticacao/login` (só técnico; gestor com a senha certa recebe 403), `POST /autenticacao/renovar`, `POST /autenticacao/sair`.
+- `POST /autenticacao/login` (só técnico; gestor com a senha certa recebe 403), `POST /autenticacao/renovar`, `POST /autenticacao/sair`, `POST /autenticacao/senha`.
 - `GET /catalogos`: última versão publicada de cada catálogo ativo, com os itens.
 - `PUT /aprs/{id}` (recebe a APR), `GET /aprs/{id}` (o que falta subir), `PUT /aprs/{id}/evidencias/{evidenciaId}` (`image/jpeg`) e `PUT /aprs/{id}/pdf` (`application/pdf`).
 
